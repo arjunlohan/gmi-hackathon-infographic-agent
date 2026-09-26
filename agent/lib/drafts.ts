@@ -8,7 +8,8 @@ export type Draft = {
   id: string;
   imageUrl: string;
   size: HySize;
-  prompt: string;
+  // Full description of the graphic (compiled spec plus any revisions), reused for re-renders.
+  basePrompt: string;
   textContract: string[];
   dataSummary: string;
   parentId?: string;

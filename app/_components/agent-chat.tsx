@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 import { type Brief, buildUserContent, StudioComposer } from "./studio-composer";
+import { HistoryButton, RecentChats, useRecordSession } from "./chat-history";
 import { StudioIntro } from "./studio-intro";
 
 const AGENT_NAME = "Plate";
@@ -67,6 +68,7 @@ export function AgentChat({
   const hasConversationContent = sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isResuming || hasConversationContent;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
+  useRecordSession(activeSessionId, agent.data.messages);
 
   const requestCancellation = () => {
     setCancellationError(undefined);
@@ -105,8 +107,12 @@ export function AgentChat({
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       {showConversationLayout ? (
-        <ChatHeader canStartNewChat={activeSessionId !== undefined} />
-      ) : null}
+        <ChatHeader activeSessionId={activeSessionId} canStartNewChat={activeSessionId !== undefined} />
+      ) : (
+        <div className="fixed top-3 left-4 z-20 sm:left-6">
+          <HistoryButton />
+        </div>
+      )}
 
       {showConversationLayout ? (
         <Conversation
@@ -157,6 +163,7 @@ export function AgentChat({
         {showConversationLayout ? null : <StudioIntro />}
         <div className="w-full">{composer}</div>
         {showConversationLayout ? null : <StudioIntro.Starters onPick={sendStarter} />}
+        {showConversationLayout ? null : <RecentChats />}
       </div>
     </main>
   );
@@ -181,9 +188,18 @@ function ErrorMessage({ message }: { readonly message: string }) {
   );
 }
 
-function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) {
+function ChatHeader({
+  activeSessionId,
+  canStartNewChat,
+}: {
+  readonly activeSessionId?: string;
+  readonly canStartNewChat: boolean;
+}) {
   return (
     <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
+      <div className="pointer-events-auto fixed top-3 left-4 sm:left-6">
+        <HistoryButton activeSessionId={activeSessionId} />
+      </div>
       <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
         <span className="truncate font-display text-muted-foreground text-sm uppercase tracking-[0.2em]">
           {AGENT_NAME}
