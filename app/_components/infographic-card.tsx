@@ -33,6 +33,7 @@ export type RenderResult = {
   note?: string;
   size: string;
   draftId?: string;
+  fileName?: string;
   imageUrl?: string;
   width?: number;
   height?: number;
@@ -57,6 +58,20 @@ const STEPS = [
 ] as const;
 
 export const INFOGRAPHIC_TOOLS = new Set(["generate_infographic", "edit_infographic"]);
+
+/** The most recent finished infographic in a conversation, if any. */
+export function latestRender(
+  messages: readonly { parts: readonly { type: string; state?: string; output?: unknown }[] }[],
+): RenderResult | undefined {
+  for (let m = messages.length - 1; m >= 0; m -= 1) {
+    for (let p = messages[m].parts.length - 1; p >= 0; p -= 1) {
+      const part = messages[m].parts[p];
+      const output = part.state === "output-available" ? (part.output as RenderResult) : undefined;
+      if (part.type === "dynamic-tool" && output?.phase === "done" && output.imageUrl) return output;
+    }
+  }
+  return undefined;
+}
 
 export function InfographicCard({ part }: { readonly part: EveDynamicToolPart }) {
   const input = (part.input ?? {}) as { title?: string; format?: string; draftId?: string };
@@ -230,7 +245,8 @@ function ImageViewer({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="flex max-h-[calc(100dvh-2rem)] w-auto max-w-[calc(100vw-2rem)] flex-col items-center gap-3 border-none bg-transparent p-0 shadow-none sm:max-w-[calc(100vw-4rem)]"
+        className="flex max-h-[calc(100dvh-2rem)] w-auto max-w-[calc(100vw-2rem)] flex-col items-center gap-4 border-none bg-transparent p-0 shadow-none sm:max-w-[calc(100vw-4rem)]"
+        overlayClassName="bg-black/85 backdrop-blur-sm"
         showCloseButton={false}
       >
         <DialogTitle className="sr-only">{alt}</DialogTitle>
@@ -242,18 +258,18 @@ function ImageViewer({
         />
         <div className="flex flex-wrap justify-center gap-2">
           <button
-            className="studio-button border-transparent bg-card shadow-md"
+            className="glass-button"
             onClick={() => onOpenChange(false)}
             type="button"
           >
             Back to chat
           </button>
-          <a className="studio-button border-transparent bg-card shadow-md" href={downloadHref(output)}>
+          <a className="glass-button" href={downloadHref(output)}>
             <DownloadIcon className="size-3.5" />
             Download PNG
           </a>
           <a
-            className="studio-button border-transparent bg-card shadow-md"
+            className="glass-button"
             href={output.imageUrl}
             rel="noreferrer"
             target="_blank"
@@ -267,8 +283,9 @@ function ImageViewer({
   );
 }
 
-function downloadHref(output: RenderResult): string {
-  return `/api/image?url=${encodeURIComponent(output.imageUrl ?? "")}&name=infographic-${output.draftId ?? "draft"}.png`;
+export function downloadHref(output: RenderResult): string {
+  const name = output.fileName ?? "infographic";
+  return `/api/image?url=${encodeURIComponent(output.imageUrl ?? "")}&name=${encodeURIComponent(name)}.png`;
 }
 
 function ReviewBadge({ output }: { readonly output: RenderResult }) {
@@ -293,7 +310,7 @@ function ReviewBadge({ output }: { readonly output: RenderResult }) {
       ) : (
         <AlertTriangleIcon className="size-3.5" />
       )}
-      {passed ? "Fact-checked" : "Needs attention"} · {review.score}/10
+      {passed ? "Fact-checked" : "Needs attention"}
     </span>
   );
 }

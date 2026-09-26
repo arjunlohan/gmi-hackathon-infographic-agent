@@ -79,5 +79,30 @@ export async function reviewInfographic(
     ],
   });
 
-  return output;
+  return sanitizeReview(output, input.textContract);
+}
+
+const normalize = (text: string) =>
+  text.normalize("NFKC").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Remove self-contradicting findings the vision model sometimes emits ("expected X, found X",
+ * or a required string listed as invented) so they never trigger a needless fix pass.
+ */
+export function sanitizeReview(review: Review, textContract: string[]): Review {
+  const required = new Set(textContract.map(normalize));
+  const wrongOrMissing = review.wrongOrMissing.filter(
+    (item) => normalize(item.expected) !== normalize(item.found),
+  );
+  const invented = review.invented.filter((item) => !required.has(normalize(item)));
+  const dropped =
+    review.wrongOrMissing.length - wrongOrMissing.length + review.invented.length - invented.length;
+  const clean = wrongOrMissing.length === 0 && invented.length === 0 && review.encodingIssues.length === 0;
+  return {
+    ...review,
+    wrongOrMissing,
+    invented,
+    verdict: dropped > 0 && clean ? "publish" : review.verdict,
+    editInstruction: dropped > 0 && clean ? "" : review.editInstruction,
+  };
 }

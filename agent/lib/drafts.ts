@@ -10,6 +10,9 @@ export type Draft = {
   size: HySize;
   // Full description of the graphic (compiled spec plus any revisions), reused for re-renders.
   basePrompt: string;
+  // Brand-kit style references reused by fresh renders of this graphic.
+  referenceImages: string[];
+  fileName: string;
   textContract: string[];
   dataSummary: string;
   parentId?: string;

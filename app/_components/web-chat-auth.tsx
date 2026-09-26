@@ -116,7 +116,7 @@ export function AccountControl({
   }
 
   return (
-    <div className="fixed top-3 left-4 z-30 flex h-8 items-center">
+    <div className="flex h-8 min-w-0 items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -163,6 +163,7 @@ export function AccountControl({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <span className="min-w-0 truncate text-sidebar-foreground/80 text-xs">{name}</span>
     </div>
   );
 }

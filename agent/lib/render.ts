@@ -7,6 +7,7 @@ import { type GeneratedImage, generateHyImage, type HySize } from "./gmi";
 import { type Review, reviewInfographic } from "./review";
 
 const MAX_PASSES = 3;
+const MAX_EDITABLE_ISSUES = 3;
 // Keep one tool call under the 300s Vercel function limit: stop starting new passes once
 // the budget is spent, and bound each upstream call.
 const WALL_BUDGET_MS = 240_000;
@@ -35,6 +36,7 @@ export type RenderResult = {
   size: HySize;
   // Present only on the final "done" snapshot.
   draftId?: string;
+  fileName?: string;
   parentId?: string;
   imageUrl?: string;
   width?: number;
@@ -93,6 +95,8 @@ export async function* renderWithQualityLoop(input: {
   size: HySize;
   textContract: string[];
   dataSummary: string;
+  referenceImages: string[];
+  fileName: string;
   // Start from an existing image (user-requested revision) instead of a fresh render.
   startFrom?: { imageUrl: string; instruction: string; parentId: string };
   signal?: AbortSignal;
@@ -109,7 +113,11 @@ export async function* renderWithQualityLoop(input: {
           reference: input.startFrom.imageUrl,
           note: "Applying your revision",
         }
-      : { method: "render", prompt: input.basePrompt, note: "Rendering with Hy Image 3.5" };
+      : {
+          method: "render",
+          prompt: input.basePrompt,
+          note: input.referenceImages.length ? "Rendering in your brand style" : "Rendering with Hy Image 3.5",
+        };
 
   for (let pass = 1; pass <= MAX_PASSES; pass += 1) {
     if (pass > 1 && Date.now() - startedAt + PASS_ESTIMATE_MS > WALL_BUDGET_MS) break;
@@ -121,7 +129,8 @@ export async function* renderWithQualityLoop(input: {
         {
           prompt: next.prompt,
           size: input.size,
-          referenceImages: next.reference ? [next.reference] : undefined,
+          // Edits reference the previous render only; fresh renders carry the brand-kit references.
+          referenceImages: next.reference ? [next.reference] : input.referenceImages,
         },
         withTimeout(input.signal, next.method === "edit" ? EDIT_TIMEOUT_MS : RENDER_TIMEOUT_MS),
       );
@@ -168,12 +177,21 @@ export async function* renderWithQualityLoop(input: {
     if (!review || review.verdict === "publish") break;
 
     const fixCount = factualIssues(review);
-    next = {
-      method: "edit",
-      prompt: editPrompt(review.editInstruction || describeFixes(review)),
-      reference: image.url,
-      note: `Correcting ${fixCount} ${fixCount === 1 ? "label" : "labels"}`,
-    };
+    // A few wrong labels are a surgical edit; many mean the render went off the rails, and a
+    // fresh render with the corrections spelled out beats patching it.
+    next =
+      fixCount <= MAX_EDITABLE_ISSUES
+        ? {
+            method: "edit",
+            prompt: editPrompt(review.editInstruction || describeFixes(review)),
+            reference: image.url,
+            note: `Correcting ${fixCount} ${fixCount === 1 ? "label" : "labels"}`,
+          }
+        : {
+            method: "render",
+            prompt: `${input.basePrompt}${input.startFrom ? `\n\nREVISION: ${input.startFrom.instruction}` : ""}\n\nCORRECTIONS (a previous render got these wrong; get them exactly right):\n${describeFixes(review)}`,
+            note: "Re-rendering with corrections",
+          };
   }
 
   if (!best) throw new Error("No render completed within the time budget.");
@@ -182,6 +200,8 @@ export async function* renderWithQualityLoop(input: {
     imageUrl: best.image.url,
     size: input.size,
     basePrompt: input.startFrom ? `${input.basePrompt}\n\nREVISION: ${input.startFrom.instruction}` : input.basePrompt,
+    referenceImages: input.referenceImages,
+    fileName: input.fileName,
     textContract: input.textContract,
     dataSummary: input.dataSummary,
     parentId: input.startFrom?.parentId,
@@ -192,6 +212,7 @@ export async function* renderWithQualityLoop(input: {
     phase: "done",
     pass: passes.length,
     draftId: draft.id,
+    fileName: draft.fileName,
     parentId: draft.parentId,
     imageUrl: best.image.url,
     width: best.image.width,

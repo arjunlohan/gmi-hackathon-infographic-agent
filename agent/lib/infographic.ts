@@ -3,6 +3,7 @@
 // repeatable: every render gets the same canvas rules, text contract, and anti-hallucination guard.
 
 import { z } from "zod";
+import { type BrandKit, brandKitDirection } from "./brand-kits";
 import type { HySize } from "./gmi";
 
 export const FORMATS = {
@@ -135,6 +136,15 @@ export const infographicSpecSchema = z.object({
   }),
   source: z.string().describe("Source line, e.g. 'Source: FAO (2024)'"),
   footnote: z.string().optional().describe("Short methodology note, one sentence"),
+  brandKitId: z
+    .string()
+    .optional()
+    .describe("Brand kit id from the user's [Brief]. The tool applies its palette, fonts, logo, publication name and reference graphics."),
+  fileName: z
+    .string()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+){0,2}$/)
+    .optional()
+    .describe("Download file name: 1-3 lowercase words in kebab-case describing the graphic, e.g. 'fertilizer-exporters', 'ceo-pay'"),
   brandMark: z
     .string()
     .optional()
@@ -146,6 +156,9 @@ export type InfographicSpec = z.infer<typeof infographicSpecSchema>;
 export type CompiledInfographic = {
   prompt: string;
   size: HySize;
+  // Style references (brand logo and past graphics) sent with every fresh render.
+  referenceImages: string[];
+  fileName: string;
   // Every string that must appear on the image, verbatim. Used by the reviewer.
   textContract: string[];
   // Data the reviewer checks visual encoding against.
@@ -174,9 +187,26 @@ function dataLines(spec: InfographicSpec): string[] {
   });
 }
 
-export function compileInfographic(spec: InfographicSpec): CompiledInfographic {
+function slugify(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 3)
+    .join("-");
+  return slug || "infographic";
+}
+
+export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): CompiledInfographic {
   const format = FORMATS[spec.format];
   const { chart } = spec;
+  const brandMark = spec.brandMark ?? kit?.publicationName;
+  const preset =
+    kit?.preferredStyle && kit.preferredStyle in STYLE_PRESETS
+      ? (kit.preferredStyle as PresetKey)
+      : spec.style.preset;
+  const kitDirection = kit ? brandKitDirection(kit) : undefined;
 
   const textContract = [
     spec.kicker,
@@ -196,13 +226,18 @@ export function compileInfographic(spec: InfographicSpec): CompiledInfographic {
     ...(spec.callouts ?? []),
     spec.source,
     spec.footnote,
-    spec.brandMark,
+    brandMark,
   ].filter((text): text is string => Boolean(text && text.trim()));
 
   const sections = [
     `A premium, publication-quality editorial infographic in the tradition of Visual Capitalist and The Economist graphics desk. ${format.label.split(",")[0]} canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.`,
 
-    `STYLE: ${STYLE_PRESETS[spec.style.preset]}${spec.style.artDirection ? ` ${spec.style.artDirection}` : ""}`,
+    // A brand kit is the style: it replaces the preset unless the kit names a preset to build on.
+    `STYLE: ${
+      kitDirection?.style && !kit?.preferredStyle
+        ? kitDirection.style
+        : `${STYLE_PRESETS[preset]}${kitDirection?.style ? ` ${kitDirection.style}` : ""}`
+    }${spec.style.artDirection ? ` Topic art direction: ${spec.style.artDirection}` : ""}`,
 
     [
       "HEADER (top-left, left-aligned):",
@@ -238,7 +273,11 @@ export function compileInfographic(spec: InfographicSpec): CompiledInfographic {
       "FOOTER (bottom, small type):",
       `- "${spec.source}"`,
       spec.footnote ? `- "${spec.footnote}"` : "",
-      spec.brandMark ? `- Brand mark in bold caps at the bottom corner: "${spec.brandMark}"` : "",
+      kitDirection?.logoInstruction
+        ? `- ${kitDirection.logoInstruction}${brandMark ? ` The logo reads "${brandMark}".` : ""}`
+        : brandMark
+          ? `- Brand mark in bold caps at the bottom corner: "${brandMark}"`
+          : "",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -256,8 +295,10 @@ export function compileInfographic(spec: InfographicSpec): CompiledInfographic {
         .join("\n");
 
   return {
-    prompt: sections.join("\n\n"),
+    prompt: sections.filter(Boolean).join("\n\n"),
     size: format.size,
+    referenceImages: kitDirection?.referenceImages ?? [],
+    fileName: spec.fileName ?? slugify(spec.title),
     textContract,
     dataSummary: `Chart form: ${chart.form}\n${dataSummary}${chart.legend?.length ? `\nLegend: ${chart.legend.map((item) => `${item.label}=${item.color}`).join(", ")}` : ""}`,
   };

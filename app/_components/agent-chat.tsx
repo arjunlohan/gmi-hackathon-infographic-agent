@@ -1,8 +1,9 @@
 "use client";
 
 import { useEveAgent } from "eve/react";
-import { AlertCircleIcon, BrainIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { AlertCircleIcon, BrainIcon } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
 import {
   Conversation,
   ConversationContent,
@@ -12,25 +13,30 @@ import {
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { NavActions } from "@/components/nav-actions";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AgentMessage } from "./agent-message";
+import { useBrandKits } from "./brand-kit-store";
+import { chatActions, useChat, useRecordChat } from "./chat-store";
 import { type Brief, buildUserContent, StudioComposer } from "./studio-composer";
-import { HistoryButton, RecentChats, useRecordSession } from "./chat-history";
 import { StudioIntro } from "./studio-intro";
 
-const AGENT_NAME = "Plate";
-
 export function AgentChat({
+  account,
   sessionId,
   sessionless = false,
+  sidebarDefaultOpen = true,
 }: {
+  readonly account?: ReactNode;
   readonly sessionId?: string;
   readonly sessionless?: boolean;
+  readonly sidebarDefaultOpen?: boolean;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
   const [brief, setBrief] = useState<Brief>({ destination: "auto", style: "auto" });
+  const { kits } = useBrandKits();
   const agent = useEveAgent({
     initialSession:
       sessionId === undefined
@@ -68,7 +74,28 @@ export function AgentChat({
   const hasConversationContent = sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isResuming || hasConversationContent;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
-  useRecordSession(activeSessionId, agent.data.messages);
+  const chat = useChat(activeSessionId);
+  useRecordChat(activeSessionId, agent.data.messages);
+
+  // A chat remembers its brand kit: restore it when the chat loads, and attach a kit picked
+  // before the first message once the chat exists.
+  const storedKitId = chat?.brandKitId;
+  const hasChat = chat !== undefined;
+  useEffect(() => {
+    if (storedKitId) setBrief((current) => ({ ...current, brandKitId: storedKitId }));
+  }, [storedKitId]);
+  useEffect(() => {
+    if (activeSessionId && hasChat && !storedKitId && brief.brandKitId) {
+      chatActions.setBrandKit(activeSessionId, brief.brandKitId);
+    }
+  }, [activeSessionId, hasChat, storedKitId, brief.brandKitId]);
+
+  const changeBrief = (next: Brief) => {
+    setBrief(next);
+    if (activeSessionId && hasChat && next.brandKitId !== brief.brandKitId) {
+      chatActions.setBrandKit(activeSessionId, next.brandKitId);
+    }
+  };
 
   const requestCancellation = () => {
     setCancellationError(undefined);
@@ -83,12 +110,12 @@ export function AgentChat({
     setHasInputText(false);
     setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
-    await agent.send(buildUserContent(message, brief), options);
+    await agent.send(buildUserContent(message, brief, kits), options);
   };
 
   const sendStarter = (prompt: string) => {
     setCancellationError(undefined);
-    void agent.send(prompt);
+    void agent.send(buildUserContent({ text: prompt, files: [] }, brief, kits));
   };
 
   const composer = (
@@ -97,75 +124,88 @@ export function AgentChat({
       hasInputText={hasInputText}
       isBusy={isBusy}
       isResuming={isResuming}
-      onBriefChange={setBrief}
+      kits={kits}
+      onBriefChange={changeBrief}
       onCancel={requestCancellation}
       onInputTextChange={setHasInputText}
       onSubmit={handleSubmit}
     />
   );
 
+  const title = chat?.title ?? (activeSessionId ? "Untitled chat" : "New chat");
+
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-      {showConversationLayout ? (
-        <ChatHeader activeSessionId={activeSessionId} canStartNewChat={activeSessionId !== undefined} />
-      ) : (
-        <div className="fixed top-3 left-4 z-20 sm:left-6">
-          <HistoryButton />
+    <SidebarProvider className="h-dvh min-h-0" defaultOpen={sidebarDefaultOpen}>
+      <AppSidebar
+        account={account}
+        activeSessionId={activeSessionId}
+        onUseBrandKit={(brandKitId) => changeBrief({ ...brief, brandKitId })}
+      />
+      <SidebarInset className="min-w-0 overflow-hidden text-foreground">
+        <header className="flex h-14 shrink-0 items-center gap-2 px-3">
+          <SidebarTrigger />
+          <Separator className="mr-1 data-[orientation=vertical]:h-4" orientation="vertical" />
+          <h1 className="min-w-0 flex-1 truncate font-medium text-sm" title={title}>
+            {title}
+          </h1>
+          {chat ? <NavActions chat={chat} messages={agent.data.messages} /> : null}
+        </header>
+
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {showConversationLayout ? (
+            <Conversation
+              className="min-h-0 flex-1"
+              initial={sessionId === undefined ? undefined : false}
+              resize={activeSessionId === undefined ? "smooth" : "instant"}
+              scrollRestorationKey={
+                isEmpty || activeSessionId === undefined
+                  ? undefined
+                  : `eve:web-chat-scroll:${activeSessionId}`
+              }
+            >
+              <ConversationTopFade />
+              <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-64 sm:px-6">
+                {agent.data.messages.map((message, index) =>
+                  showPendingThinking &&
+                  isPendingAssistantShell &&
+                  message.id === lastMessage.id ? null : (
+                    <AgentMessage
+                      canRespond={!isBusy && !isResuming}
+                      isStreaming={
+                        agent.status === "streaming" && index === agent.data.messages.length - 1
+                      }
+                      key={message.id}
+                      message={message}
+                      onInputResponses={(inputResponses) => {
+                        setCancellationError(undefined);
+                        return agent.respond(inputResponses);
+                      }}
+                    />
+                  ),
+                )}
+                {showPendingThinking ? <PendingThinking /> : null}
+                {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
+          ) : null}
+
+          {showConversationLayout ? (
+            <div className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-3xl bg-gradient-to-t from-background via-background to-transparent px-4 pt-4 pb-6 sm:px-6">
+              {composer}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center gap-8 px-4 py-10 sm:px-6">
+                <StudioIntro />
+                {composer}
+                <StudioIntro.Starters onPick={sendStarter} />
+              </div>
+            </div>
+          )}
         </div>
-      )}
-
-      {showConversationLayout ? (
-        <Conversation
-          className="min-h-0 flex-1"
-          initial={sessionId === undefined ? undefined : false}
-          resize={activeSessionId === undefined ? "smooth" : "instant"}
-          scrollRestorationKey={
-            isEmpty || activeSessionId === undefined
-              ? undefined
-              : `eve:web-chat-scroll:${activeSessionId}`
-          }
-        >
-          <ConversationTopFade className="top-14" />
-          <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-64 sm:px-6">
-            {agent.data.messages.map((message, index) =>
-              showPendingThinking &&
-              isPendingAssistantShell &&
-              message.id === lastMessage.id ? null : (
-                <AgentMessage
-                  canRespond={!isBusy && !isResuming}
-                  isStreaming={
-                    agent.status === "streaming" && index === agent.data.messages.length - 1
-                  }
-                  key={message.id}
-                  message={message}
-                  onInputResponses={(inputResponses) => {
-                    setCancellationError(undefined);
-                    return agent.respond(inputResponses);
-                  }}
-                />
-              ),
-            )}
-            {showPendingThinking ? <PendingThinking /> : null}
-            {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
-      ) : null}
-
-      <div
-        className={cn(
-          "mx-auto w-full px-4 sm:px-6",
-          showConversationLayout
-            ? "fixed bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
-            : "flex max-w-3xl flex-1 flex-col justify-center gap-8 overflow-y-auto py-12",
-        )}
-      >
-        {showConversationLayout ? null : <StudioIntro />}
-        <div className="w-full">{composer}</div>
-        {showConversationLayout ? null : <StudioIntro.Starters onPick={sendStarter} />}
-        {showConversationLayout ? null : <RecentChats />}
-      </div>
-    </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -185,40 +225,6 @@ function ErrorMessage({ message }: { readonly message: string }) {
         </div>
       </MessageContent>
     </Message>
-  );
-}
-
-function ChatHeader({
-  activeSessionId,
-  canStartNewChat,
-}: {
-  readonly activeSessionId?: string;
-  readonly canStartNewChat: boolean;
-}) {
-  return (
-    <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
-      <div className="pointer-events-auto fixed top-3 left-4 sm:left-6">
-        <HistoryButton activeSessionId={activeSessionId} />
-      </div>
-      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
-        <span className="truncate font-display text-muted-foreground text-sm uppercase tracking-[0.2em]">
-          {AGENT_NAME}
-        </span>
-        {canStartNewChat ? (
-          <Button
-            aria-label="Start a new chat"
-            className="pointer-events-auto fixed top-3 right-6 pr-4"
-            onClick={() => window.location.assign("/s")}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon className="size-4" />
-            <span className="hidden font-normal text-sm sm:inline">New chat</span>
-          </Button>
-        ) : null}
-      </div>
-    </header>
   );
 }
 

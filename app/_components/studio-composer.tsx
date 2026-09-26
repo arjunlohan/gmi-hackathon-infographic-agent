@@ -1,7 +1,8 @@
 "use client";
 
 import type { UserContent } from "ai";
-import { FileTextIcon, PaperclipIcon, SquareIcon, XIcon } from "lucide-react";
+import { FileTextIcon, PaperclipIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
+import { useState } from "react";
 import {
   PromptInput,
   PromptInputButton,
@@ -17,27 +18,14 @@ import {
   PromptInputTextarea,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
+import { BrandKitDialog } from "./brand-kit-dialog";
 
-export const DESTINATIONS = [
-  { id: "auto", label: "Any destination", format: "" },
-  { id: "article", label: "Article · 3:4", format: "portrait" },
-  { id: "newsletter", label: "Newsletter · 1:1", format: "square" },
-  { id: "blog-header", label: "Blog header · 16:9", format: "landscape" },
-  { id: "story", label: "Social story · 9:16", format: "tall" },
-] as const;
+export { DESTINATIONS, STYLES } from "./studio-options";
+import { DESTINATIONS, STYLES } from "./studio-options";
 
-export const STYLES = [
-  { id: "auto", label: "Style: auto" },
-  { id: "dark_editorial", label: "Dark editorial" },
-  { id: "cinematic_hero", label: "Cinematic hero" },
-  { id: "chalkboard", label: "Chalkboard" },
-  { id: "illustrated_map", label: "Illustrated map" },
-  { id: "material_texture", label: "Material texture" },
-  { id: "clean_light", label: "Clean light" },
-  { id: "neon_tech", label: "Neon tech" },
-] as const;
+export type Brief = { destination: string; style: string; brandKitId?: string };
 
-export type Brief = { destination: string; style: string };
+type KitRef = { id: string; name: string };
 
 // Muse Spark reads PDFs and images natively; plain-text formats are inlined as text parts.
 const ACCEPT = ".pdf,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm,image/png,image/jpeg,image/webp";
@@ -57,7 +45,8 @@ function decodeDataUrl(url: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-function briefLine({ destination, style }: Brief): string | undefined {
+function briefLine({ destination, style, brandKitId }: Brief, kits: readonly KitRef[]): string | undefined {
+  const kit = brandKitId ? kits.find((item) => item.id === brandKitId) : undefined;
   const parts = [
     destination !== "auto"
       ? (() => {
@@ -66,12 +55,17 @@ function briefLine({ destination, style }: Brief): string | undefined {
         })()
       : "",
     style !== "auto" ? `style preset ${style}` : "",
+    kit ? `brand kit "${kit.name}" (id ${kit.id})` : "",
   ].filter(Boolean);
   return parts.length > 0 ? `[Brief: ${parts.join(", ")}]` : undefined;
 }
 
-export function buildUserContent(message: PromptInputMessage, brief: Brief): string | UserContent {
-  const text = [briefLine(brief), message.text.trim()].filter(Boolean).join("\n\n");
+export function buildUserContent(
+  message: PromptInputMessage,
+  brief: Brief,
+  kits: readonly KitRef[],
+): string | UserContent {
+  const text = [briefLine(brief, kits), message.text.trim()].filter(Boolean).join("\n\n");
   if (message.files.length === 0) return text;
 
   const parts: Exclude<UserContent, string> = [];
@@ -94,8 +88,12 @@ export function buildUserContent(message: PromptInputMessage, brief: Brief): str
   return parts;
 }
 
+const NO_KIT = "none";
+const NEW_KIT = "new";
+
 export function StudioComposer({
   brief,
+  kits,
   isBusy,
   isResuming,
   onBriefChange,
@@ -105,6 +103,7 @@ export function StudioComposer({
   onInputTextChange,
 }: {
   readonly brief: Brief;
+  readonly kits: readonly (KitRef & { colors: string[]; logoUrl?: string })[];
   readonly isBusy: boolean;
   readonly isResuming: boolean;
   readonly onBriefChange: (brief: Brief) => void;
@@ -113,7 +112,9 @@ export function StudioComposer({
   readonly hasInputText: boolean;
   readonly onInputTextChange: (hasText: boolean) => void;
 }) {
+  const [creatingKit, setCreatingKit] = useState(false);
   return (
+    <>
     <PromptInput accept={ACCEPT} globalDrop multiple onSubmit={onSubmit}>
       <AttachmentChips />
       <PromptInputTextarea
@@ -126,7 +127,8 @@ export function StudioComposer({
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           <UploadButton />
           <PromptInputSelect
-            onValueChange={(destination) => onBriefChange({ ...brief, destination })}
+            // The form resets after each send, which makes Radix emit "": keep the choice.
+            onValueChange={(destination) => destination && onBriefChange({ ...brief, destination })}
             value={brief.destination}
           >
             <PromptInputSelectTrigger aria-label="Destination" size="sm">
@@ -141,7 +143,7 @@ export function StudioComposer({
             </PromptInputSelectContent>
           </PromptInputSelect>
           <PromptInputSelect
-            onValueChange={(style) => onBriefChange({ ...brief, style })}
+            onValueChange={(style) => style && onBriefChange({ ...brief, style })}
             value={brief.style}
           >
             <PromptInputSelectTrigger aria-label="Style" size="sm">
@@ -155,6 +157,35 @@ export function StudioComposer({
               ))}
             </PromptInputSelectContent>
           </PromptInputSelect>
+          <PromptInputSelect
+            onValueChange={(value) => {
+              if (!value) return;
+              if (value === NEW_KIT) setCreatingKit(true);
+              else onBriefChange({ ...brief, brandKitId: value === NO_KIT ? undefined : value });
+            }}
+            value={brief.brandKitId && kits.some((kit) => kit.id === brief.brandKitId) ? brief.brandKitId : NO_KIT}
+          >
+            <PromptInputSelectTrigger aria-label="Brand kit" size="sm">
+              <PromptInputSelectValue />
+            </PromptInputSelectTrigger>
+            <PromptInputSelectContent>
+              <PromptInputSelectItem value={NO_KIT}>No brand kit</PromptInputSelectItem>
+              {kits.map((kit) => (
+                <PromptInputSelectItem key={kit.id} value={kit.id}>
+                  <span
+                    aria-hidden="true"
+                    className="size-3 rounded-sm border border-white/15"
+                    style={{ background: kit.colors[0] ?? "#888888" }}
+                  />
+                  {kit.name}
+                </PromptInputSelectItem>
+              ))}
+              <PromptInputSelectItem value={NEW_KIT}>
+                <PlusIcon className="size-3.5" />
+                New brand kit…
+              </PromptInputSelectItem>
+            </PromptInputSelectContent>
+          </PromptInputSelect>
         </div>
       </PromptInputFooter>
       <ComposerAction
@@ -164,6 +195,12 @@ export function StudioComposer({
         onCancel={onCancel}
       />
     </PromptInput>
+    <BrandKitDialog
+      onOpenChange={setCreatingKit}
+      onSaved={(kit) => onBriefChange({ ...brief, brandKitId: kit.id })}
+      open={creatingKit}
+    />
+    </>
   );
 }
 

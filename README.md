@@ -25,9 +25,22 @@ input (chat · paste · URL · upload)
 | Render, then review pipeline | `agent/lib/render.ts` |
 | Tools | `agent/tools/generate_infographic.ts`, `agent/tools/edit_infographic.ts` |
 | GMI MCP connection (catalog, pricing, history) | `agent/connections/gmi.ts` |
-| Studio UI | `app/_components/*` |
+| Brand kits (Blob store, style summaries, prompt direction) | `agent/lib/brand-kits.ts`, `app/api/brand-kits/*` |
+| Studio UI and sidebar | `app/_components/*`, `components/app-sidebar.tsx`, `components/nav-actions.tsx` |
 
 Why a compiler instead of free-form prompts: every string on the graphic comes from typed spec fields, so the reviewer can check the render against an exact list of what should be printed. That catches the classic image-model failures: misspelled names, dropped units, invented statistics, stray labels.
+
+### Brand kits
+
+A brand kit holds a publication's name, logo, palette, fonts, house-style notes and up to 4 past graphics. Pick one in the composer (or from the sidebar) and every render in that chat follows it; the chat remembers its kit.
+
+- Past graphics are never sent to Hy Image. Sending them as reference images leaked their labels and numbers into new renders in testing. Instead, when a kit is saved, Muse Spark studies them once and writes a content-free house-style guide that replaces the style preset in the prompt.
+- The logo is the only reference image, and it is the single brand mark on the page.
+- Kits and assets live in the Vercel Blob store `plate-brand-kits` (`BLOB_READ_WRITE_TOKEN`), scoped to the signed-in user.
+
+### Chats
+
+The sidebar lists chats with AI-generated titles (Muse Spark, low effort), favorites, rename, copy link, copy transcript, trash, and search over titles and conversation text (⌘K). eve has no session-listing API, so this index is kept per browser; the conversations themselves are durable on the server.
 
 ### GMI Cloud: API key and MCP
 
@@ -39,7 +52,7 @@ Why a compiler instead of free-form prompts: every string on the graphic comes f
 
 ```bash
 pnpm install          # pnpm 10 (npx pnpm@10 install if your global pnpm is older)
-vercel env pull .env.local   # VERCEL_OIDC_TOKEN for AI Gateway; re-run when it expires (about 12h)
+vercel env pull .env.local   # VERCEL_OIDC_TOKEN (AI Gateway) and BLOB_READ_WRITE_TOKEN; re-run when the OIDC token expires (about 12h)
 echo "GMI_API_KEY=..." >> .env.local
 pnpm dev              # http://localhost:3000
 ```

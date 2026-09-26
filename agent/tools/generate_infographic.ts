@@ -1,4 +1,5 @@
 import { defineTool } from "eve/tools";
+import { getBrandKit } from "../lib/brand-kits";
 import { compileInfographic, infographicSpecSchema } from "../lib/infographic";
 import { type RenderResult, renderWithQualityLoop, summarizeForModel } from "../lib/render";
 
@@ -15,7 +16,9 @@ export default defineTool({
         : `Draft ${output.draftId} rendered`,
   },
   async *execute(spec, ctx) {
-    const { prompt, ...compiled } = compileInfographic(spec);
+    const kit = spec.brandKitId ? await getBrandKit(spec.brandKitId) : undefined;
+    if (spec.brandKitId && !kit) throw new Error(`Brand kit "${spec.brandKitId}" was not found.`);
+    const { prompt, ...compiled } = compileInfographic(spec, kit);
     yield* renderWithQualityLoop({ ...compiled, basePrompt: prompt, signal: ctx.abortSignal });
   },
   toModelOutput(output) {
