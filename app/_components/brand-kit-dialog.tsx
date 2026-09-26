@@ -2,7 +2,16 @@
 
 import { ImagePlusIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Button } from "@/components/ui/button";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +101,7 @@ export function BrandKitDialog({
   const [draft, setDraft] = useState<BrandKitInput>(EMPTY);
   const [busy, setBusy] = useState<"saving" | "deleting" | "uploading" | undefined>();
   const [error, setError] = useState<string>();
+  const [dialogElement, setDialogElement] = useState<HTMLDivElement | null>(null);
   const formId = useId();
 
   useEffect(() => {
@@ -149,7 +159,10 @@ export function BrandKitDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-xl">
+      <DialogContent
+        className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-xl"
+        ref={setDialogElement}
+      >
         <DialogHeader className="border-b p-5">
           <DialogTitle className="font-display text-xl uppercase tracking-wide">
             {kit ? "Edit brand kit" : "New brand kit"}
@@ -216,18 +229,18 @@ export function BrandKitDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Headline font">
-              <OptionSelect
+              <FontCombobox
+                container={dialogElement}
                 label="Headline font"
                 onChange={(headingFont) => patch({ headingFont })}
-                options={FONTS.map((font) => ({ id: font, label: font }))}
                 value={draft.headingFont}
               />
             </Field>
             <Field label="Body font">
-              <OptionSelect
+              <FontCombobox
+                container={dialogElement}
                 label="Body font"
                 onChange={(bodyFont) => patch({ bodyFont })}
-                options={FONTS.map((font) => ({ id: font, label: font }))}
                 value={draft.bodyFont}
               />
             </Field>
@@ -325,6 +338,51 @@ function Field({ children, label }: { readonly children: React.ReactNode; readon
   );
 }
 
+const FONT_ITEMS = ["Auto", ...FONTS];
+
+/** Searchable font list with an "Auto" default; undefined means auto. */
+function FontCombobox({
+  container,
+  label,
+  onChange,
+  value,
+}: {
+  readonly container: HTMLElement | null;
+  readonly label: string;
+  readonly onChange: (value: string | undefined) => void;
+  readonly value?: string;
+}) {
+  return (
+    <Combobox
+      autoHighlight
+      items={FONT_ITEMS}
+      onValueChange={(next: string | null) => onChange(next && next !== "Auto" ? next : undefined)}
+      value={value && FONTS.includes(value) ? value : "Auto"}
+    >
+      <ComboboxInput
+        aria-label={label}
+        className="w-full"
+        // Enter picks the highlighted font; it must not submit the kit form around it.
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.preventDefault();
+        }}
+        onFocus={(event) => event.currentTarget.select()}
+        placeholder="Auto"
+      />
+      <ComboboxContent container={container}>
+        <ComboboxEmpty>No fonts found.</ComboboxEmpty>
+        <ComboboxList className="max-h-64">
+          {(item: string) => (
+            <ComboboxItem key={item} value={item}>
+              {item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  );
+}
+
 /** shadcn Select with an "Auto" default; undefined means auto. */
 function OptionSelect({
   label,
@@ -370,7 +428,7 @@ function ColorChip({
 }) {
   return (
     <span className="flex items-center gap-2 rounded-full border py-1 pr-1.5 pl-1">
-      <label className="relative size-7 shrink-0 cursor-pointer overflow-hidden rounded-full border border-white/20">
+      <label className="relative size-7 shrink-0 cursor-pointer overflow-hidden rounded-full border border-foreground/15">
         <span className="absolute inset-0" style={{ background: color }} />
         <input
           aria-label={`${role} color`}
@@ -398,10 +456,20 @@ function ColorChip({
   );
 }
 
-const TILE = "relative flex size-20 shrink-0 overflow-hidden rounded-md border";
+const TILE = "relative flex size-full overflow-hidden rounded-md border";
+
+/** Square slot for logo and reference thumbnails. */
+function Square({ children }: { readonly children: React.ReactNode }) {
+  return (
+    <div className="w-20 shrink-0">
+      <AspectRatio ratio={1}>{children}</AspectRatio>
+    </div>
+  );
+}
 
 function Tile({ onRemove, url }: { readonly onRemove: () => void; readonly url: string }) {
   return (
+    <Square>
     <span className={cn(TILE, "bg-muted")}>
       {/* biome-ignore lint/performance/noImgElement: user-uploaded brand asset */}
       <img alt="" className="size-full object-cover object-top" src={url} />
@@ -414,6 +482,7 @@ function Tile({ onRemove, url }: { readonly onRemove: () => void; readonly url: 
         <XIcon className="size-3" />
       </button>
     </span>
+    </Square>
   );
 }
 
@@ -430,7 +499,7 @@ function UploadTile({
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
-    <>
+    <Square>
       <button
         className={cn(
           TILE,
@@ -454,6 +523,6 @@ function UploadTile({
         ref={input}
         type="file"
       />
-    </>
+    </Square>
   );
 }

@@ -174,7 +174,7 @@ export function StudioComposer({
                 <PromptInputSelectItem key={kit.id} value={kit.id}>
                   <span
                     aria-hidden="true"
-                    className="size-3 rounded-sm border border-white/15"
+                    className="size-3 rounded-sm border border-foreground/15"
                     style={{ background: kit.colors[0] ?? "#888888" }}
                   />
                   {kit.name}

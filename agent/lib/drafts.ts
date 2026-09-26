@@ -3,6 +3,7 @@
 
 import { defineState } from "eve/context";
 import type { HySize } from "./gmi";
+import type { CalloutCheck } from "./infographic";
 
 export type Draft = {
   id: string;
@@ -15,6 +16,7 @@ export type Draft = {
   fileName: string;
   textContract: string[];
   dataSummary: string;
+  callouts?: CalloutCheck[];
   parentId?: string;
 };
 

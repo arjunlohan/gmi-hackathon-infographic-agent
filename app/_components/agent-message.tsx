@@ -4,31 +4,26 @@ import type {
   EveAuthorizationPart,
   EveDynamicToolPart,
   EveMessage,
-  EveMessageInputRequest,
   EveMessagePart,
 } from "eve/react";
-import { useState } from "react";
 import {
-  ArrowRightIcon,
+  cloneElement,
+  type ComponentProps,
+  createElement,
+  type HTMLAttributes,
+  isValidElement,
+  type ReactElement,
+} from "react";
+import {
   CheckCircleIcon,
-  CheckIcon,
   ExternalLinkIcon,
   FileIcon,
   ImageIcon,
   KeyRoundIcon,
   XCircleIcon,
 } from "lucide-react";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import {
-  Question,
-  QuestionInput,
-  QuestionOption,
-  QuestionOptions,
-  QuestionPrompt,
-  type QuestionResponse,
-  QuestionSubmit,
-  type QuestionValue,
-} from "@/components/ai-elements/question";
+import type { Components, ExtraProps } from "streamdown";
+import { MessageResponse } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import {
   BashToolContent,
@@ -38,8 +33,12 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Message, MessageContent } from "@/components/ui/message";
 import { cn } from "@/lib/utils";
+import { type ActivityPart, ActivityGroup, tidyReasoning } from "./activity-group";
+import { ClarifyingQuestions, isQuestionPart } from "./clarifying-questions";
 import { INFOGRAPHIC_TOOLS, InfographicCard } from "./infographic-card";
 
 export type AgentInputResponse = {
@@ -49,6 +48,38 @@ export type AgentInputResponse = {
 };
 
 type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
+
+// Agent replies are styled by typeset (app/typeset.css). Streamdown's own element components carry
+// utility classes that outrank typeset's component layer, so text elements render plain. Code
+// blocks and mermaid keep Streamdown's UI and are fenced off from typeset.
+const TYPESET_TAGS = [
+  "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "hr", "strong",
+  "sup", "sub", "table", "thead", "tbody", "tr", "th", "td",
+] as const;
+
+const plain =
+  (tag: string) =>
+  ({ node: _node, ...props }: ExtraProps & HTMLAttributes<HTMLElement>) =>
+    createElement(tag, props);
+
+const typesetComponents = {
+  ...Object.fromEntries(TYPESET_TAGS.map((tag) => [tag, plain(tag)])),
+  inlineCode: plain("code"),
+  a: ({ node: _node, ...props }: ExtraProps & ComponentProps<"a">) =>
+    createElement("a", { ...props, rel: "noreferrer", target: "_blank" }),
+  // Same as Streamdown's pre (marks the code as a block), inside a typeset exclusion.
+  pre: ({ children }: ComponentProps<"pre">) => (
+    <div data-not-typeset="">
+      {isValidElement(children)
+        ? cloneElement(children as ReactElement<Record<string, unknown>>, { "data-block": "true" })
+        : children}
+    </div>
+  ),
+} as Components;
+
+// Streamdown's root adds space-y-4 in the utilities layer; revert-layer hands child margins back
+// to typeset's flow.
+const TYPESET_ROOT = "typeset typeset-docs max-w-[37em] [&>*]:[margin-block:revert-layer]";
 
 export function AgentMessage({
   canRespond,
@@ -61,34 +92,121 @@ export function AgentMessage({
   readonly message: EveMessage;
   readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
 }) {
+  const optimistic = message.metadata?.optimistic ? "true" : undefined;
+
+  if (message.role === "user") {
+    const files = message.parts.filter((part) => part.type === "file");
+    const text = message.parts
+      .flatMap((part) => (part.type === "text" && part.text ? [part.text] : []))
+      .join("\n\n");
+    return (
+      <Message align="end" data-optimistic={optimistic}>
+        <MessageContent>
+          {files.map((part, index) => (
+            <div data-slot="message-attachment" key={partKey(part, index)}>
+              <AttachmentPart part={part} />
+            </div>
+          ))}
+          {text ? (
+            <Bubble align="end">
+              <BubbleContent className="rounded-2xl px-4 py-2.5">
+                <MessageResponse>{text}</MessageResponse>
+              </BubbleContent>
+            </Bubble>
+          ) : null}
+        </MessageContent>
+      </Message>
+    );
+  }
+
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1,
   );
-  const hasAssistantText =
-    message.role === "assistant" &&
-    message.parts.some((part) => part.type === "text" && part.text.length > 0);
+  const questions = message.parts.filter(isQuestionPart);
+  const segments = segmentParts(message.parts);
 
   return (
-    <Message
-      data-optimistic={message.metadata?.optimistic ? "true" : undefined}
-      from={message.role}
-    >
+    <Message data-optimistic={optimistic}>
       <MessageContent>
-        {message.parts.map((part, index) =>
-          hasAssistantText && part.type === "reasoning" ? null : (
+        {segments.map((segment, segmentIndex) => {
+          const isLast = segmentIndex === segments.length - 1;
+          if (segment.kind === "activity") {
+            const isActive = isStreaming && isLast;
+            const key = `activity:${segment.start}`;
+            // Thinking alone reads as one Reasoning block; thinking mixed with tools reads as
+            // a chain of thought with named steps.
+            if (segment.parts.every((part) => part.type === "reasoning")) {
+              const text = segment.parts
+                .map((part) => (part.type === "reasoning" ? tidyReasoning(part.text) : ""))
+                .join("\n\n");
+              return (
+                <Reasoning isStreaming={isActive} key={key}>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{text}</ReasoningContent>
+                </Reasoning>
+              );
+            }
+            return <ActivityGroup isActive={isActive} key={key} parts={segment.parts} />;
+          }
+          const { part, index } = segment;
+          if (isQuestionPart(part)) {
+            // All questions in a message render once, as one questionnaire.
+            return part === questions[0] ? (
+              <ClarifyingQuestions
+                canRespond={canRespond}
+                key={part.toolCallId}
+                onInputResponses={onInputResponses}
+                parts={questions}
+              />
+            ) : null;
+          }
+          return (
             <AgentMessagePart
               canRespond={canRespond}
               key={partKey(part, index)}
               onInputResponses={onInputResponses}
               part={part}
-              showCaret={isStreaming && message.role === "assistant" && index === lastTextIndex}
+              showCaret={isStreaming && index === lastTextIndex}
             />
-          ),
-        )}
+          );
+        })}
       </MessageContent>
     </Message>
   );
+}
+
+type Segment =
+  | { readonly kind: "activity"; readonly start: number; readonly parts: ActivityPart[] }
+  | { readonly kind: "part"; readonly index: number; readonly part: EveMessagePart };
+
+/** Background work (thinking, research, ordinary tools) between visible outputs. */
+function isActivityPart(part: EveMessagePart): part is ActivityPart {
+  if (part.type === "reasoning") return part.text.trim().length > 0;
+  if (part.type !== "dynamic-tool") return false;
+  return (
+    !INFOGRAPHIC_TOOLS.has(part.toolName) &&
+    part.toolMetadata?.eve?.inputRequest === undefined &&
+    part.state !== "approval-requested" &&
+    part.state !== "approval-responded"
+  );
+}
+
+/** Groups consecutive activity parts; every other part stands on its own. */
+function segmentParts(parts: readonly EveMessagePart[]): Segment[] {
+  const segments: Segment[] = [];
+  parts.forEach((part, index) => {
+    if (part.type === "step-start" || (part.type === "text" && part.text.length === 0)) return;
+    if (part.type === "reasoning" && !isActivityPart(part)) return;
+    if (isActivityPart(part)) {
+      const last = segments.at(-1);
+      if (last?.kind === "activity") last.parts.push(part);
+      else segments.push({ kind: "activity", start: index, parts: [part] });
+      return;
+    }
+    segments.push({ kind: "part", index, part });
+  });
+  return segments;
 }
 
 function AgentMessagePart({
@@ -107,34 +225,22 @@ function AgentMessagePart({
       return null;
     case "text":
       return (
-        <MessageResponse caret="block" isAnimating={showCaret}>
+        <MessageResponse
+          caret="block"
+          className={TYPESET_ROOT}
+          components={typesetComponents}
+          isAnimating={showCaret}
+        >
           {part.text}
         </MessageResponse>
       );
     case "reasoning":
-      return (
-        <Reasoning defaultOpen isStreaming={part.state === "streaming"}>
-          <ReasoningTrigger />
-          <ReasoningContent>{part.text}</ReasoningContent>
-        </Reasoning>
-      );
+      return null;
     case "file":
       return <AttachmentPart part={part} />;
     case "authorization":
       return <AuthorizationPrompt part={part} />;
     case "dynamic-tool": {
-      const inputRequest = part.toolMetadata?.eve?.inputRequest;
-      if (inputRequest?.kind === "question") {
-        return (
-          <QuestionRequest
-            canRespond={canRespond}
-            inputRequest={inputRequest}
-            inputResponse={part.toolMetadata?.eve?.inputResponse}
-            onInputResponses={onInputResponses}
-          />
-        );
-      }
-
       if (INFOGRAPHIC_TOOLS.has(part.toolName)) {
         return <InfographicCard part={part} />;
       }
@@ -168,104 +274,6 @@ function AgentMessagePart({
       );
     }
   }
-}
-
-function QuestionRequest({
-  canRespond,
-  inputRequest,
-  inputResponse,
-  onInputResponses,
-}: {
-  readonly canRespond: boolean;
-  readonly inputRequest: EveMessageInputRequest;
-  readonly inputResponse?: AgentInputResponse;
-  readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
-}) {
-  const hasOptions = (inputRequest.options?.length ?? 0) > 0;
-  const acceptsFreeform = inputRequest.allowFreeform === true || !hasOptions;
-  const [questionValue, setQuestionValue] = useState<QuestionValue>({
-    selectedValues: inputResponse?.optionId ? [inputResponse.optionId] : [],
-    text: inputResponse?.text ?? "",
-  });
-
-  const submitOption = (optionId: string) => {
-    setQuestionValue((value) => ({ ...value, selectedValues: [optionId] }));
-    return onInputResponses([
-      {
-        optionId,
-        requestId: inputRequest.requestId,
-      },
-    ]);
-  };
-
-  const submitResponse = ({ selectedValues, text }: QuestionResponse) =>
-    onInputResponses([
-      {
-        optionId: selectedValues[0],
-        requestId: inputRequest.requestId,
-        text,
-      },
-    ]);
-
-  return (
-    <Question
-      disabled={!canRespond || inputResponse !== undefined}
-      onSubmit={submitResponse}
-      onValueChange={setQuestionValue}
-      value={questionValue}
-    >
-      <QuestionPrompt>{inputRequest.prompt}</QuestionPrompt>
-      {hasOptions ? (
-        <QuestionOptions className="flex-col items-stretch" aria-label={inputRequest.prompt}>
-          {inputRequest.options?.map((option, index) => (
-            <QuestionOption
-              className="justify-start px-3 py-2 text-left"
-              key={option.id}
-              onClick={() => void submitOption(option.id)}
-              value={option.id}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-foreground text-sm leading-tight">{option.label}</span>
-                {option.description ? (
-                  <span className="block text-sm text-muted-foreground leading-tight">
-                    {option.description}
-                  </span>
-                ) : null}
-              </span>
-              {inputResponse === undefined ? (
-                <span aria-hidden="true" className="relative size-6 shrink-0">
-                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-foreground/8 text-xs text-muted-foreground transition-opacity group-hover/option:opacity-0 group-focus-visible/option:opacity-0">
-                    {index + 1}
-                  </span>
-                  <ArrowRightIcon className="absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2 text-muted-foreground opacity-0 transition-[color,opacity] group-hover/option:text-foreground group-hover/option:opacity-100 group-focus-visible/option:opacity-100" />
-                </span>
-              ) : (
-                <CheckIcon className="size-4 shrink-0 opacity-0 transition-opacity group-data-[state=checked]/option:opacity-100" />
-              )}
-            </QuestionOption>
-          ))}
-        </QuestionOptions>
-      ) : null}
-      {acceptsFreeform ? (
-        <div className="relative">
-          <QuestionInput
-            aria-label="Answer"
-            className={inputResponse === undefined ? "pr-12 pb-12" : undefined}
-            placeholder="Type your answer…"
-          />
-          {inputResponse === undefined && questionValue.text.trim().length > 0 ? (
-            <QuestionSubmit
-              aria-label="Answer"
-              className="absolute right-2 bottom-2"
-              size="icon-sm"
-            >
-              <ArrowRightIcon />
-            </QuestionSubmit>
-          ) : null}
-        </div>
-      ) : null}
-    </Question>
-  );
 }
 
 function AttachmentPart({ part }: { readonly part: EveFilePart }) {

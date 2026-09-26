@@ -22,6 +22,7 @@ import {
   useBackfillTitles,
   useChats,
 } from "@/app/_components/chat-store";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
@@ -148,6 +149,7 @@ export function AppSidebar({
               ) : null}
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <ModeToggle />
         </SidebarMenu>
         {account ? <div className="px-2 pb-1">{account}</div> : null}
       </SidebarFooter>
@@ -394,7 +396,7 @@ export function KitSwatch({ kit }: { readonly kit: BrandKit }) {
   return (
     <span
       aria-hidden="true"
-      className="size-4 shrink-0 rounded-sm border border-white/15"
+      className="size-4 shrink-0 rounded-sm border border-foreground/15"
       style={{ background: `linear-gradient(135deg, ${a} 50%, ${b} 50%)` }}
     />
   );

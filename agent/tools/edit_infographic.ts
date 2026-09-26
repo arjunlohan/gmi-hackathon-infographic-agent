@@ -29,6 +29,7 @@ export default defineTool({
       size: parent.size,
       textContract: parent.textContract,
       dataSummary: parent.dataSummary,
+      callouts: parent.callouts,
       referenceImages: parent.referenceImages ?? [],
       fileName: parent.fileName ?? "infographic",
       startFrom: { imageUrl: parent.imageUrl, instruction, parentId: parent.id },

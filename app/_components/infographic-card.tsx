@@ -8,11 +8,22 @@ import {
   CopyIcon,
   DownloadIcon,
   ExternalLinkIcon,
+  ImageIcon,
   Maximize2Icon,
+  PackageCheckIcon,
+  PenLineIcon,
+  ScanSearchIcon,
   ShieldCheckIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { Shimmer } from "@/components/ai-elements/shimmer";
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtStep,
+} from "@/components/ai-elements/chain-of-thought";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -51,10 +62,10 @@ const FORMAT_RATIO: Record<string, string> = {
 };
 
 const STEPS = [
-  { id: "planning", label: "Plan" },
-  { id: "rendering", label: "Render" },
-  { id: "checking", label: "Fact-check" },
-  { id: "done", label: "Deliver" },
+  { id: "planning", label: "Plan", icon: PenLineIcon },
+  { id: "rendering", label: "Render", icon: ImageIcon },
+  { id: "checking", label: "Fact-check", icon: ScanSearchIcon },
+  { id: "done", label: "Deliver", icon: PackageCheckIcon },
 ] as const;
 
 export const INFOGRAPHIC_TOOLS = new Set(["generate_infographic", "edit_infographic"]);
@@ -85,6 +96,7 @@ export function InfographicCard({ part }: { readonly part: EveDynamicToolPart })
     : (FORMAT_RATIO[input.format ?? ""] ?? "3 / 4");
   // Cap height near the viewport: tall and portrait drafts get narrower cards.
   const [w, h] = ratio.split("/").map((n) => Number(n.trim()));
+  const aspect = w / h;
   const maxWidth = `max(20rem, min(100%, calc(70dvh * ${w / h})))`;
   const title = isEdit
     ? `Revision of ${input.draftId ?? "draft"}`
@@ -104,7 +116,7 @@ export function InfographicCard({ part }: { readonly part: EveDynamicToolPart })
 
   return (
     <figure
-      className="w-full overflow-hidden rounded-2xl border bg-card shadow-[0_1px_2px_oklch(0_0_0/0.3),0_12px_32px_-12px_oklch(0_0_0/0.6)]"
+      className="w-full overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-[var(--card-shadow)]"
       style={{ maxWidth }}
     >
       <figcaption className="flex items-center justify-between gap-3 border-b px-4 py-3">
@@ -120,9 +132,9 @@ export function InfographicCard({ part }: { readonly part: EveDynamicToolPart })
       </figcaption>
 
       {isDone && output?.imageUrl ? (
-        <FinishedImage alt={input.title ?? "Generated infographic"} output={output} ratio={ratio} />
+        <FinishedImage alt={input.title ?? "Generated infographic"} aspect={aspect} output={output} />
       ) : (
-        <InProgress output={output} phase={phase} ratio={ratio} />
+        <InProgress aspect={aspect} output={output} phase={phase} />
       )}
 
       {isDone && output ? <CardFooter output={output} /> : null}
@@ -131,13 +143,13 @@ export function InfographicCard({ part }: { readonly part: EveDynamicToolPart })
 }
 
 function InProgress({
+  aspect,
   output,
   phase,
-  ratio,
 }: {
+  readonly aspect: number;
   readonly output?: RenderResult;
   readonly phase: string;
-  readonly ratio: string;
 }) {
   // A refining pass is another render + check; show it on the Render step.
   const stepId = phase === "refining" ? "rendering" : phase;
@@ -147,71 +159,52 @@ function InProgress({
     (phase === "planning" ? "Picking the story, chart form and visual concept" : "Working");
 
   return (
-    <div
-      className="relative flex flex-col items-center justify-center gap-5 p-8"
-      style={{ aspectRatio: ratio }}
-    >
-      <div className="studio-scan absolute inset-0" aria-hidden="true" />
-      <ol aria-label="Progress" className="relative flex flex-wrap items-center justify-center gap-2">
-        {STEPS.map((step, index) => (
-          <li className="flex items-center gap-2" key={step.id}>
-            <span
-              aria-current={index === activeIndex ? "step" : undefined}
-              className={cn(
-                "flex items-center gap-1.5 text-xs transition-colors duration-[var(--duration-base)]",
-                index < activeIndex && "text-foreground",
-                index === activeIndex && "font-medium text-signal",
-                index > activeIndex && "text-muted-foreground/60",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex size-4 items-center justify-center rounded-full border",
-                  index < activeIndex && "border-foreground bg-foreground text-background",
-                  index === activeIndex && "border-signal",
-                )}
-              >
-                {index < activeIndex ? <CheckIcon className="size-2.5" /> : null}
-              </span>
-              {step.label}
-            </span>
-            {index < STEPS.length - 1 ? (
-              <span aria-hidden="true" className="h-px w-4 bg-border" />
-            ) : null}
-          </li>
-        ))}
-      </ol>
-      <div className="relative text-center text-sm">
-        <Shimmer duration={1.5}>{note}</Shimmer>
-      </div>
-      {output && output.pass > 1 ? (
-        <p className="relative text-muted-foreground text-xs tabular-nums">
-          Pass {output.pass} of {output.maxPasses}
+    <>
+      <AspectRatio className="flex items-center justify-center overflow-hidden p-8" ratio={aspect}>
+        <div className="studio-scan absolute inset-0" aria-hidden="true" />
+        <p className="shimmer relative max-w-xs text-balance text-center text-muted-foreground text-sm">
+          {note}
         </p>
-      ) : null}
-    </div>
+      </AspectRatio>
+      <ChainOfThought className="border-t px-4 py-3" defaultOpen>
+        <ChainOfThoughtHeader>
+          {output && output.pass > 1 ? `Pass ${output.pass} of ${output.maxPasses}` : "Progress"}
+        </ChainOfThoughtHeader>
+        <ChainOfThoughtContent>
+          {STEPS.map((step, index) => (
+            <ChainOfThoughtStep
+              aria-current={index === activeIndex ? "step" : undefined}
+              icon={index < activeIndex ? CheckIcon : step.icon}
+              key={step.id}
+              label={step.label}
+              status={index < activeIndex ? "complete" : index === activeIndex ? "active" : "pending"}
+            />
+          ))}
+        </ChainOfThoughtContent>
+      </ChainOfThought>
+    </>
   );
 }
 
 function FinishedImage({
   alt,
+  aspect,
   output,
-  ratio,
 }: {
   readonly alt: string;
+  readonly aspect: number;
   readonly output: RenderResult;
-  readonly ratio: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        aria-label="View full size"
-        className="group relative block w-full cursor-zoom-in bg-black/40 focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] focus-visible:outline-none"
-        onClick={() => setOpen(true)}
-        style={{ aspectRatio: ratio }}
-        type="button"
-      >
+      <AspectRatio ratio={aspect}>
+        <button
+          aria-label="View full size"
+          className="group relative block size-full cursor-zoom-in bg-muted focus-visible:shadow-[inset_0_0_0_2px_var(--ring)] focus-visible:outline-none dark:bg-black/40"
+          onClick={() => setOpen(true)}
+          type="button"
+        >
         {/* biome-ignore lint/performance/noImgElement: remote GMI asset, rendered as-is */}
         <img
           alt={alt}
@@ -224,7 +217,8 @@ function FinishedImage({
         <span className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-[var(--duration-fast)] group-focus-visible:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
           <Maximize2Icon className="size-4" />
         </span>
-      </button>
+        </button>
+      </AspectRatio>
       <ImageViewer alt={alt} onOpenChange={setOpen} open={open} output={output} />
     </>
   );
@@ -302,7 +296,9 @@ function ReviewBadge({ output }: { readonly output: RenderResult }) {
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-medium text-xs tabular-nums",
-        passed ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-400/15 text-amber-300",
+        passed
+          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+          : "bg-amber-400/20 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
       )}
     >
       {passed ? (
@@ -337,7 +333,7 @@ function CardFooter({ output }: { readonly output: RenderResult }) {
   return (
     <div className="space-y-3 px-4 py-3">
       {factual.length > 0 ? (
-        <ul className="space-y-1 rounded-lg bg-amber-400/10 p-3 text-amber-100/90 text-xs">
+        <ul className="space-y-1 rounded-lg bg-amber-400/15 p-3 text-amber-900 text-xs dark:bg-amber-400/10 dark:text-amber-100/90">
           {factual.map((issue) => (
             <li className="flex gap-2" key={issue}>
               <span aria-hidden="true">·</span>
@@ -360,14 +356,22 @@ function CardFooter({ output }: { readonly output: RenderResult }) {
         </details>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <a className="studio-button" href={downloadHref(output)}>
-          <DownloadIcon className="size-3.5" />
-          Download PNG
-        </a>
-        <button className="studio-button" onClick={() => void copyPrompt()} type="button">
-          {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+        <Button asChild className="rounded-full" size="sm" variant="outline">
+          <a href={downloadHref(output)}>
+            <DownloadIcon />
+            Download PNG
+          </a>
+        </Button>
+        <Button
+          className="rounded-full"
+          onClick={() => void copyPrompt()}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
           {copied ? "Copied" : "Copy prompt"}
-        </button>
+        </Button>
         <span className="ml-auto text-muted-foreground text-xs tabular-nums">
           {passCount === 1 ? "Checked in 1 pass" : `Refined over ${passCount} passes`}
         </span>

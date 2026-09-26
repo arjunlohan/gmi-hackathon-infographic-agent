@@ -119,10 +119,22 @@ export const infographicSpecSchema = z.object({
       .describe("Arrangement only (e.g. 'outlier bar broken with a // marker'). Never put words to print here; printed text belongs in callouts or footnote."),
   }),
   callouts: z
-    .array(z.string())
+    .array(
+      z.object({
+        text: z
+          .string()
+          .describe("The annotation as printed, a true statement from the source, e.g. 'Vietnam grows mostly robusta'"),
+        anchor: z
+          .string()
+          .optional()
+          .describe(
+            "The exact data label (or matrix row/column) this note is about; its pointer ends on that element. Omit for a statement about the whole chart, which then gets no pointer.",
+          ),
+      }),
+    )
     .max(3)
     .optional()
-    .describe("0-3 short annotations, each a true statement from the source, e.g. 'Over half of exports come from just four countries.'"),
+    .describe("0-3 short annotations, each tied to one data element or to none"),
   hero: z
     .string()
     .optional()
@@ -153,6 +165,9 @@ export const infographicSpecSchema = z.object({
 
 export type InfographicSpec = z.infer<typeof infographicSpecSchema>;
 
+/** A callout and the data element its pointer must end on (none for a general statement). */
+export type CalloutCheck = { text: string; anchor?: string };
+
 export type CompiledInfographic = {
   prompt: string;
   size: HySize;
@@ -163,7 +178,26 @@ export type CompiledInfographic = {
   textContract: string[];
   // Data the reviewer checks visual encoding against.
   dataSummary: string;
+  // Where each callout must point. Used by the reviewer.
+  callouts: CalloutCheck[];
 };
+
+/** Callouts with their anchors resolved to printed labels; an unknown anchor is a spec error. */
+function checkedCallouts(spec: InfographicSpec): CalloutCheck[] {
+  const labels = spec.chart.matrix
+    ? [...spec.chart.matrix.rows, ...spec.chart.matrix.columns]
+    : spec.chart.data.map((point) => point.label);
+  return (spec.callouts ?? []).map(({ text, anchor }) => {
+    if (!anchor?.trim()) return { text };
+    const match = labels.find((label) => label.trim().toLowerCase() === anchor.trim().toLowerCase());
+    if (!match) {
+      throw new Error(
+        `Callout "${text}" is anchored to "${anchor}", which is not a data label. Use one of: ${labels.map((label) => `"${label}"`).join(", ")}, or omit the anchor for a statement about the whole chart.`,
+      );
+    }
+    return { text, anchor: match };
+  });
+}
 
 function dataLines(spec: InfographicSpec): string[] {
   const { chart } = spec;
@@ -207,6 +241,7 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
       ? (kit.preferredStyle as PresetKey)
       : spec.style.preset;
   const kitDirection = kit ? brandKitDirection(kit) : undefined;
+  const callouts = checkedCallouts(spec);
 
   const textContract = [
     spec.kicker,
@@ -223,7 +258,7 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
         ]
       : chart.data.flatMap((point) => [point.label, point.value])),
     ...(chart.legend?.map((item) => item.label) ?? []),
-    ...(spec.callouts ?? []),
+    ...callouts.map((callout) => callout.text),
     spec.source,
     spec.footnote,
     brandMark,
@@ -263,8 +298,15 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
       .filter(Boolean)
       .join("\n"),
 
-    spec.callouts?.length
-      ? `CALLOUTS: small annotation boxes or notes placed beside the relevant data, text exactly:\n${spec.callouts.map((text) => `- "${text}"`).join("\n")}`
+    callouts.length
+      ? [
+          "CALLOUTS: small annotation boxes, text exactly as quoted. Each pointer, tail or leader line must end precisely on the element named, never on a neighboring row, bar or point:",
+          ...callouts.map((callout) =>
+            callout.anchor
+              ? `- "${callout.text}": placed right beside "${callout.anchor}", its pointer ending exactly on the "${callout.anchor}" ${chart.matrix ? "row or column" : "data mark"}.`
+              : `- "${callout.text}": a free-standing note in open space with no pointer, tail or leader line; it refers to the chart as a whole.`,
+          ),
+        ].join("\n")
       : "",
 
     spec.hero ? `HERO VISUAL: ${spec.hero}. It must never cover labels, values or the headline.` : "",
@@ -300,6 +342,7 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
     referenceImages: kitDirection?.referenceImages ?? [],
     fileName: spec.fileName ?? slugify(spec.title),
     textContract,
+    callouts,
     dataSummary: `Chart form: ${chart.form}\n${dataSummary}${chart.legend?.length ? `\nLegend: ${chart.legend.map((item) => `${item.label}=${item.color}`).join(", ")}` : ""}`,
   };
 }

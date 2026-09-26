@@ -1,20 +1,23 @@
 "use client";
 
 import { useEveAgent } from "eve/react";
-import { AlertCircleIcon, BrainIcon } from "lucide-react";
+import { AlertCircleIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-  ConversationTopFade,
-} from "@/components/ai-elements/conversation";
-import { Message, MessageContent } from "@/components/ai-elements/message";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { NavActions } from "@/components/nav-actions";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { Message, MessageContent } from "@/components/ui/message";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
 import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AgentMessage } from "./agent-message";
 import { useBrandKits } from "./brand-kit-store";
@@ -154,41 +157,59 @@ export function AgentChat({
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           {showConversationLayout ? (
-            <Conversation
-              className="min-h-0 flex-1"
-              initial={sessionId === undefined ? undefined : false}
-              resize={activeSessionId === undefined ? "smooth" : "instant"}
-              scrollRestorationKey={
-                isEmpty || activeSessionId === undefined
-                  ? undefined
-                  : `eve:web-chat-scroll:${activeSessionId}`
-              }
+            // Opens a saved chat at its last question; each new question anchors near the top
+            // and the answer streams in below it, followed only while the reader stays at the edge.
+            <MessageScrollerProvider
+              autoScroll
+              defaultScrollPosition="last-anchor"
+              scrollPreviousItemPeek={64}
             >
-              <ConversationTopFade />
-              <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-64 sm:px-6">
-                {agent.data.messages.map((message, index) =>
-                  showPendingThinking &&
-                  isPendingAssistantShell &&
-                  message.id === lastMessage.id ? null : (
-                    <AgentMessage
-                      canRespond={!isBusy && !isResuming}
-                      isStreaming={
-                        agent.status === "streaming" && index === agent.data.messages.length - 1
-                      }
-                      key={message.id}
-                      message={message}
-                      onInputResponses={(inputResponses) => {
-                        setCancellationError(undefined);
-                        return agent.respond(inputResponses);
-                      }}
-                    />
-                  ),
-                )}
-                {showPendingThinking ? <PendingThinking /> : null}
-                {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
-              </ConversationContent>
-              <ConversationScrollButton />
-            </Conversation>
+              <MessageScroller className="min-h-0 flex-1">
+                <MessageScrollerViewport>
+                  <MessageScrollerContent
+                    aria-busy={isBusy}
+                    className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-64 sm:px-6"
+                  >
+                    {agent.data.messages.map((message, index) =>
+                      showPendingThinking &&
+                      isPendingAssistantShell &&
+                      message.id === lastMessage.id ? null : (
+                        <MessageScrollerItem
+                          key={message.id}
+                          messageId={message.id}
+                          scrollAnchor={message.role === "user"}
+                        >
+                          <AgentMessage
+                            canRespond={!isBusy && !isResuming}
+                            isStreaming={
+                              agent.status === "streaming" &&
+                              index === agent.data.messages.length - 1
+                            }
+                            message={message}
+                            onInputResponses={(inputResponses) => {
+                              setCancellationError(undefined);
+                              return agent.respond(inputResponses);
+                            }}
+                          />
+                        </MessageScrollerItem>
+                      ),
+                    )}
+                    {showPendingThinking ? (
+                      <MessageScrollerItem messageId="pending">
+                        <PendingThinking />
+                      </MessageScrollerItem>
+                    ) : null}
+                    {errorMessage ? (
+                      <MessageScrollerItem messageId="error">
+                        <ErrorMessage message={errorMessage} />
+                      </MessageScrollerItem>
+                    ) : null}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+                {/* Sits above the floating composer. */}
+                <MessageScrollerButton className="data-[direction=end]:bottom-44" />
+              </MessageScroller>
+            </MessageScrollerProvider>
           ) : null}
 
           {showConversationLayout ? (
@@ -212,7 +233,7 @@ export function AgentChat({
 
 function ErrorMessage({ message }: { readonly message: string }) {
   return (
-    <Message className="max-w-full" from="assistant">
+    <Message>
       <MessageContent>
         <div
           className="flex w-full items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm"
@@ -231,14 +252,12 @@ function ErrorMessage({ message }: { readonly message: string }) {
 
 function PendingThinking() {
   return (
-    <Message aria-live="polite" from="assistant">
-      <MessageContent>
-        <div className="mb-4 flex w-full items-center gap-2 text-muted-foreground text-sm">
-          <BrainIcon className="size-4" />
-          <Shimmer duration={1}>Thinking</Shimmer>
-        </div>
-      </MessageContent>
-    </Message>
+    <Marker role="status">
+      <MarkerIcon>
+        <Spinner />
+      </MarkerIcon>
+      <MarkerContent className="shimmer">Thinking…</MarkerContent>
+    </Marker>
   );
 }
 

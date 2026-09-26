@@ -4,6 +4,7 @@
 
 import { generateText, Output } from "ai";
 import { z } from "zod";
+import type { CalloutCheck } from "./infographic";
 
 export const REVIEW_MODEL = "meta/muse-spark-1.3-contributor";
 
@@ -13,6 +14,18 @@ export const reviewSchema = z.object({
     .describe(
       "Transcription of EVERY readable piece of text on the image, top to bottom, left to right, exactly as rendered (including typos, duplicates and stray words). Do this before judging.",
     ),
+  annotations: z
+    .array(
+      z.object({
+        text: z.string().describe("The callout or annotation text as rendered"),
+        pointsTo: z
+          .string()
+          .describe(
+            "The data label of the row, bar, segment or point that this callout's pointer, tail, leader line or dot indicates: follow it to its tip. If the tip touches a data mark, name that mark. If the tip stops in empty space, name the row, bar or point level with the tip (same height for horizontal bars, same position for columns). 'none' only when the callout has no pointer at all.",
+          ),
+      }),
+    )
+    .describe("Every callout, speech bubble or annotation note on the image, with what it points at"),
   verdict: z
     .enum(["publish", "fix"])
     .describe("'publish' only if every data value and headline is correct and nothing is invented"),
@@ -37,7 +50,12 @@ export const reviewSchema = z.object({
 export type Review = z.infer<typeof reviewSchema>;
 
 export async function reviewInfographic(
-  input: { imageUrl: string; textContract: string[]; dataSummary: string },
+  input: {
+    imageUrl: string;
+    textContract: string[];
+    dataSummary: string;
+    callouts?: CalloutCheck[];
+  },
   signal?: AbortSignal,
 ): Promise<Review> {
   const image = await fetch(input.imageUrl, { signal });
@@ -68,6 +86,7 @@ export async function reviewInfographic(
               "- wrongOrMissing: a required string that is absent, misspelled, or shows a different number or name. If only the unit suffix or formatting differs and the number is identical (for example '23.2' for '23.2M' when the unit is stated elsewhere), put it once in designIssues instead.",
               "- invented: observed text that corresponds to no required string (stray labels, placeholder words, extra statistics). Never list a variant of a required string here; it belongs in exactly one list.",
               "- Rank prefixes (1., 2., ...) are acceptable. Tick numbers are acceptable only on a real axis of the chart; numbers in decorative illustrations (rulers, graph paper, doodles) are invented.",
+              "- annotations: for every callout box or speech bubble, trace its pointer, tail or leader line to its tip and name the data element the tip indicates: the mark it touches, or, if it stops in empty space, the row level with the tip. Judge by the tip, not by where the box sits, and never assume the callout points where its text says.",
               "- Encoding: measure bar lengths (or areas) against each other. Ratios should match the data ratios within about 10% on a zero baseline; a visibly truncated or inconsistent scale goes in encodingIssues.",
               "Verdict 'fix' only for factual problems: wrongOrMissing or invented non-empty, or an encoding that misrepresents the data. Formatting and design issues alone still get 'publish' with a lower score.",
               "Be strict about numbers, names and stray text; they are what make an infographic untrustworthy. Ignore decorative background texture that contains no readable words.",
@@ -79,7 +98,7 @@ export async function reviewInfographic(
     ],
   });
 
-  return sanitizeReview(output, input.textContract);
+  return checkCallouts(sanitizeReview(output, input.textContract), input.callouts ?? []);
 }
 
 const normalize = (text: string) =>
@@ -105,4 +124,49 @@ export function sanitizeReview(review: Review, textContract: string[]): Review {
     verdict: dropped > 0 && clean ? "publish" : review.verdict,
     editInstruction: dropped > 0 && clean ? "" : review.editInstruction,
   };
+}
+
+const NO_POINTER = new Set(["", "none", "no pointer", "nothing", "n/a"]);
+
+/**
+ * A callout that points at the wrong row misstates the data as surely as a wrong number, so a
+ * mismatch between where a pointer ends and the spec's anchor is a factual issue. The vision
+ * model only reports what each pointer touches; the comparison happens here.
+ */
+export function checkCallouts(review: Review, callouts: CalloutCheck[]): Review {
+  const issues: string[] = [];
+  for (const callout of callouts) {
+    const observed = review.annotations.find((item) => sameCallout(item.text, callout.text));
+    if (!observed) continue; // a missing callout is already a wrongOrMissing finding
+    const target = normalize(observed.pointsTo).replace(/^(the )?/, "");
+    if (callout.anchor) {
+      const anchor = normalize(callout.anchor);
+      if (!NO_POINTER.has(target) && !target.includes(anchor) && !anchor.includes(target)) {
+        issues.push(
+          `The callout "${callout.text}" points at "${observed.pointsTo}"; its pointer must end on "${callout.anchor}".`,
+        );
+      }
+    } else if (!NO_POINTER.has(target)) {
+      issues.push(
+        `The callout "${callout.text}" is a general statement but points at "${observed.pointsTo}"; remove its pointer or leader line.`,
+      );
+    }
+  }
+  if (issues.length === 0) return review;
+  return {
+    ...review,
+    encodingIssues: [...review.encodingIssues, ...issues],
+    verdict: "fix",
+    editInstruction: [review.editInstruction, ...issues].filter(Boolean).join(" "),
+  };
+}
+
+/** Rendered callout text is matched to the spec loosely: same opening words, or most words. */
+function sameCallout(observed: string, expected: string): boolean {
+  const a = normalize(observed);
+  const b = normalize(expected);
+  if (a.includes(b.slice(0, 24)) || b.includes(a.slice(0, 24))) return true;
+  const words = new Set(a.split(" "));
+  const shared = b.split(" ").filter((word) => words.has(word)).length;
+  return shared / Math.max(1, b.split(" ").length) >= 0.6;
 }

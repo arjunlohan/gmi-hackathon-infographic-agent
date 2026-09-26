@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Oswald } from "next/font/google";
 import type { ReactNode } from "react";
+import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
 const sans = Geist({
-  variable: "--font-sans",
+  variable: "--font-geist",
   subsets: ["latin"],
   weight: "variable",
   display: "swap",
@@ -20,7 +21,7 @@ const display = Oswald({
 });
 
 const mono = Geist_Mono({
-  variable: "--font-mono",
+  variable: "--font-geist-mono",
   subsets: ["latin"],
   weight: "variable",
   display: "swap",
@@ -35,9 +36,15 @@ export const metadata: Metadata = {
 // The page and Eve routes validate the generated app's Better Auth session.
 export default function RootLayout({ children }: { readonly children: ReactNode }) {
   return (
-    <html className={cn(sans.variable, mono.variable, display.variable)} lang="en">
+    <html
+      className={cn(sans.variable, mono.variable, display.variable)}
+      lang="en"
+      suppressHydrationWarning
+    >
       <body>
-        <TooltipProvider>{children}</TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" disableTransitionOnChange enableSystem>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

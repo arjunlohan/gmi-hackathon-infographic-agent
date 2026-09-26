@@ -4,6 +4,7 @@
 
 import { type Draft, saveDraft } from "./drafts";
 import { type GeneratedImage, generateHyImage, type HySize } from "./gmi";
+import type { CalloutCheck } from "./infographic";
 import { type Review, reviewInfographic } from "./review";
 
 const MAX_PASSES = 3;
@@ -95,6 +96,8 @@ export async function* renderWithQualityLoop(input: {
   size: HySize;
   textContract: string[];
   dataSummary: string;
+  // Where each callout must point; the reviewer checks the render against it.
+  callouts?: CalloutCheck[];
   referenceImages: string[];
   fileName: string;
   // Start from an existing image (user-requested revision) instead of a fresh render.
@@ -157,7 +160,12 @@ export async function* renderWithQualityLoop(input: {
     const candidate: Candidate = { image, prompt: next.prompt };
     try {
       candidate.review = await reviewInfographic(
-        { imageUrl: image.url, textContract: input.textContract, dataSummary: input.dataSummary },
+        {
+          imageUrl: image.url,
+          textContract: input.textContract,
+          dataSummary: input.dataSummary,
+          callouts: input.callouts,
+        },
         withTimeout(input.signal, 60_000),
       );
     } catch (error) {
@@ -204,6 +212,7 @@ export async function* renderWithQualityLoop(input: {
     fileName: input.fileName,
     textContract: input.textContract,
     dataSummary: input.dataSummary,
+    callouts: input.callouts,
     parentId: input.startFrom?.parentId,
   });
 
