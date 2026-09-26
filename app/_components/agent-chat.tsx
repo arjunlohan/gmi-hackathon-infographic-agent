@@ -1,8 +1,7 @@
 "use client";
 
-import type { UserContent } from "ai";
 import { useEveAgent } from "eve/react";
-import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
+import { AlertCircleIcon, BrainIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import {
   Conversation,
@@ -11,20 +10,15 @@ import {
   ConversationTopFade,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent } from "@/components/ai-elements/message";
-import {
-  PromptInput,
-  PromptInputButton,
-  type PromptInputMessage,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  usePromptInputAttachments,
-} from "@/components/ai-elements/prompt-input";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
+import { type Brief, buildUserContent, StudioComposer } from "./studio-composer";
+import { StudioIntro } from "./studio-intro";
 
-const AGENT_NAME = "gmi-hackathon-infographic";
+const AGENT_NAME = "Plate";
 
 export function AgentChat({
   sessionId,
@@ -35,6 +29,7 @@ export function AgentChat({
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
   const [hasInputText, setHasInputText] = useState(false);
+  const [brief, setBrief] = useState<Brief>({ destination: "auto", style: "auto" });
   const agent = useEveAgent({
     initialSession:
       sessionId === undefined
@@ -81,48 +76,30 @@ export function AgentChat({
   };
 
   const handleSubmit = async (message: PromptInputMessage) => {
-    const text = message.text.trim();
-    if ((text.length === 0 && message.files.length === 0) || isResuming) return;
+    if ((message.text.trim().length === 0 && message.files.length === 0) || isResuming) return;
 
     setHasInputText(false);
     setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
+    await agent.send(buildUserContent(message, brief), options);
+  };
 
-    if (message.files.length === 0) {
-      await agent.send(text, options);
-      return;
-    }
-
-    const parts: UserContent = [];
-    if (text.length > 0) {
-      parts.push({ text, type: "text" });
-    }
-    for (const file of message.files) {
-      parts.push({
-        data: file.url,
-        filename: file.filename,
-        mediaType: file.mediaType,
-        type: "file",
-      });
-    }
-
-    await agent.send(parts, options);
+  const sendStarter = (prompt: string) => {
+    setCancellationError(undefined);
+    void agent.send(prompt);
   };
 
   const composer = (
-    <PromptInput onSubmit={handleSubmit}>
-      <PromptInputTextarea
-        disabled={isResuming}
-        onChange={(event) => setHasInputText(event.currentTarget.value.trim().length > 0)}
-        placeholder="Send a message…"
-      />
-      <ComposerAction
-        hasInputText={hasInputText}
-        isBusy={isBusy}
-        isResuming={isResuming}
-        onCancel={requestCancellation}
-      />
-    </PromptInput>
+    <StudioComposer
+      brief={brief}
+      hasInputText={hasInputText}
+      isBusy={isBusy}
+      isResuming={isResuming}
+      onBriefChange={setBrief}
+      onCancel={requestCancellation}
+      onInputTextChange={setHasInputText}
+      onSubmit={handleSubmit}
+    />
   );
 
   return (
@@ -143,7 +120,7 @@ export function AgentChat({
           }
         >
           <ConversationTopFade className="top-14" />
-          <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-36 sm:px-6">
+          <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-64 sm:px-6">
             {agent.data.messages.map((message, index) =>
               showPendingThinking &&
               isPendingAssistantShell &&
@@ -174,47 +151,14 @@ export function AgentChat({
           "mx-auto w-full px-4 sm:px-6",
           showConversationLayout
             ? "fixed bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
-            : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]",
+            : "flex max-w-3xl flex-1 flex-col justify-center gap-8 overflow-y-auto py-12",
         )}
       >
-        {showConversationLayout ? null : (
-          <div className="flex flex-col items-center gap-3 text-center">
-            <h1 className="font-medium text-5xl tracking-tighter">{AGENT_NAME}</h1>
-          </div>
-        )}
+        {showConversationLayout ? null : <StudioIntro />}
         <div className="w-full">{composer}</div>
+        {showConversationLayout ? null : <StudioIntro.Starters onPick={sendStarter} />}
       </div>
     </main>
-  );
-}
-
-function ComposerAction({
-  hasInputText,
-  isBusy,
-  isResuming,
-  onCancel,
-}: {
-  readonly hasInputText: boolean;
-  readonly isBusy: boolean;
-  readonly isResuming: boolean;
-  readonly onCancel: () => void;
-}) {
-  const attachments = usePromptInputAttachments();
-  const canSubmit = hasInputText || attachments.files.length > 0;
-
-  if (!isBusy || canSubmit) {
-    return <PromptInputSubmit disabled={isResuming} />;
-  }
-
-  return (
-    <PromptInputButton
-      aria-label="Stop"
-      className="absolute right-2.5 bottom-2.5"
-      onClick={onCancel}
-      variant="outline"
-    >
-      <SquareIcon className="size-3 fill-current" />
-    </PromptInputButton>
   );
 }
 
@@ -241,7 +185,9 @@ function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) 
   return (
     <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
       <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
-        <span className="truncate text-muted-foreground text-sm">{AGENT_NAME}</span>
+        <span className="truncate font-display text-muted-foreground text-sm uppercase tracking-[0.2em]">
+          {AGENT_NAME}
+        </span>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"

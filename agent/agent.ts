@@ -1,5 +1,6 @@
 import { defineAgent } from "eve";
 
 export default defineAgent({
-  model: "google/gemini-3.8-flash",
+  model: "meta/muse-spark-1.3-contributor",
+  reasoning: "medium",
 });

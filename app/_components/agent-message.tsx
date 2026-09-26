@@ -40,6 +40,7 @@ import {
 } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { INFOGRAPHIC_TOOLS, InfographicCard } from "./infographic-card";
 
 export type AgentInputResponse = {
   readonly optionId?: string;
@@ -132,6 +133,10 @@ function AgentMessagePart({
             onInputResponses={onInputResponses}
           />
         );
+      }
+
+      if (INFOGRAPHIC_TOOLS.has(part.toolName)) {
+        return <InfographicCard part={part} />;
       }
 
       return (

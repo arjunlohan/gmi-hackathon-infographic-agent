@@ -26,54 +26,40 @@
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-display: var(--font-oswald), "Oswald", "Arial Narrow", sans-serif;
+  --color-signal: var(--signal);
 }
 
 :root {
-  color-scheme: light;
-  /* Soft neutral page with white elevated surfaces so cards/composer pop. */
-  --background: oklch(0.971 0 0);
-  --foreground: oklch(0.16 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0 0);
-  --primary: oklch(0.19 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0 0);
-  --secondary-foreground: oklch(0.19 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.94 0 0);
-  --accent-foreground: oklch(0.19 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.916 0 0);
-  --input: oklch(0.916 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-}
+  /* Newsroom palette: ink canvas, paper text, one signal-yellow accent (the heat-scale yellow
+     from the reference infographics). The studio is dark-only so renders read true to color. */
+  color-scheme: dark;
+  --background: oklch(0.155 0.006 270);
+  --foreground: oklch(0.96 0.008 85);
+  --card: oklch(0.2 0.008 270);
+  --card-foreground: oklch(0.96 0.008 85);
+  --popover: oklch(0.22 0.008 270);
+  --popover-foreground: oklch(0.96 0.008 85);
+  --primary: oklch(0.9 0.17 100);
+  --primary-foreground: oklch(0.18 0.01 270);
+  --secondary: oklch(0.26 0.008 270);
+  --secondary-foreground: oklch(0.96 0.008 85);
+  --muted: oklch(0.26 0.008 270);
+  --muted-foreground: oklch(0.7 0.01 85);
+  --accent: oklch(0.28 0.008 270);
+  --accent-foreground: oklch(0.96 0.008 85);
+  --destructive: oklch(0.68 0.19 25);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.9 0.17 100 / 60%);
+  --signal: oklch(0.9 0.17 100);
+  --radius: 0.75rem;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-  }
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
 * {
@@ -97,4 +83,59 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+/* Secondary action pill used on infographic cards and starters. */
+.studio-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--foreground);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.studio-button:active {
+  transform: scale(0.96);
+}
+.studio-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+@media (hover: hover) {
+  .studio-button:hover {
+    background: var(--accent);
+  }
+}
+
+/* Render-in-progress texture: a slow scanline sweep so a 30s wait reads as work, not a hang. */
+.studio-scan {
+  background:
+    linear-gradient(180deg, transparent 0%, oklch(0.9 0.17 100 / 0.08) 50%, transparent 100%) 0 0 / 100% 40% no-repeat,
+    repeating-linear-gradient(0deg, oklch(1 0 0 / 0.03) 0 1px, transparent 1px 12px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .studio-scan {
+    animation: studio-scan 2.4s linear infinite;
+  }
+}
+@keyframes studio-scan {
+  from {
+    background-position: 0 -40%, 0 0;
+  }
+  to {
+    background-position: 0 140%, 0 0;
+  }
 }
