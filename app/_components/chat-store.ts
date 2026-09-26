@@ -94,6 +94,8 @@ export function updateChat(sessionId: string, patch: Partial<ChatEntry>) {
 }
 
 export const chatActions = {
+  /** The user sent a message: move the chat to the top. */
+  touch: (sessionId: string) => updateChat(sessionId, { updatedAt: Date.now() }),
   rename: (sessionId: string, title: string) =>
     updateChat(sessionId, { title: title.trim().slice(0, 80), titleSource: "user" }),
   toggleFavorite: (sessionId: string) => {
@@ -196,11 +198,13 @@ export function useRecordChat(sessionId: string | undefined, messages: readonly 
     .slice(0, SEARCH_TEXT_LIMIT);
   const thumbnailUrl = latestImage(messages);
 
+  // Metadata sync only. Recency (updatedAt) changes when the user sends a message
+  // (chatActions.touch); opening a chat replays its history and must not reorder the sidebar.
   useEffect(() => {
     if (!sessionId || !firstText) return;
     const existing = load().find((chat) => chat.sessionId === sessionId);
-    const now = Date.now();
     if (!existing) {
+      const now = Date.now();
       save([
         {
           sessionId,
@@ -213,8 +217,11 @@ export function useRecordChat(sessionId: string | undefined, messages: readonly 
         },
         ...load(),
       ]);
-    } else if (existing.searchText !== searchText || existing.thumbnailUrl !== thumbnailUrl) {
-      updateChat(sessionId, { searchText, thumbnailUrl, updatedAt: now });
+    } else if (
+      searchText.length >= existing.searchText.length &&
+      (existing.searchText !== searchText || existing.thumbnailUrl !== thumbnailUrl)
+    ) {
+      updateChat(sessionId, { searchText, thumbnailUrl });
     }
     if ((existing?.titleSource ?? "prompt") === "prompt") void requestTitle(sessionId, firstText);
   }, [sessionId, firstText, searchText, thumbnailUrl]);

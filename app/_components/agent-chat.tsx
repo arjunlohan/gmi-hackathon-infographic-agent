@@ -110,6 +110,7 @@ export function AgentChat({
     setHasInputText(false);
     setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
+    if (activeSessionId) chatActions.touch(activeSessionId);
     await agent.send(buildUserContent(message, brief, kits), options);
   };
 

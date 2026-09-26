@@ -96,12 +96,6 @@ body {
   font-family: var(--font-sans);
 }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
-
 h1,
 h2 {
   text-wrap: balance;

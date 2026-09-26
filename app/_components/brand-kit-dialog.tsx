@@ -12,6 +12,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -23,17 +30,37 @@ import {
 } from "./brand-kit-store";
 import { STYLES } from "./studio-options";
 
-const MAX_COLORS = 6;
 const MAX_REFERENCES = 4;
+const COLOR_ROLES = ["Primary", "Secondary", "Accent 1", "Accent 2", "Accent 3", "Accent 4"];
 const DEFAULT_COLORS = ["#d9432b", "#1f1f2b", "#f6f3ee"];
+const AUTO = "auto";
+const FONTS = [
+  "Anton",
+  "Archivo Black",
+  "Barlow Condensed",
+  "Bebas Neue",
+  "DM Serif Display",
+  "Fraunces",
+  "Futura",
+  "Georgia",
+  "Gotham",
+  "Helvetica Neue",
+  "IBM Plex Sans",
+  "Inter",
+  "Libre Baskerville",
+  "Montserrat",
+  "Oswald",
+  "Playfair Display",
+  "Poppins",
+  "Roboto Condensed",
+  "Source Serif",
+  "Space Grotesk",
+];
 
 const EMPTY: BrandKitInput = {
   name: "",
   publicationName: "",
   colors: DEFAULT_COLORS,
-  headingFont: "",
-  bodyFont: "",
-  preferredStyle: "",
   notes: "",
   referenceUrls: [],
 };
@@ -91,7 +118,7 @@ export function BrandKitDialog({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.name.trim()) {
-      setError("Give the kit a name.");
+      setError("Add a kit name.");
       return;
     }
     setBusy("saving");
@@ -127,45 +154,41 @@ export function BrandKitDialog({
           <DialogTitle className="font-display text-xl uppercase tracking-wide">
             {kit ? "Edit brand kit" : "New brand kit"}
           </DialogTitle>
-          <DialogDescription>
-            Every infographic in a chat that uses this kit follows its logo, colors, type and past
-            graphics.
+          <DialogDescription className="sr-only">
+            Logo, colors, fonts and references applied to infographics.
           </DialogDescription>
         </DialogHeader>
 
         <form className="flex-1 space-y-5 overflow-y-auto p-5" id={formId} onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Kit name" hint="Shown in the sidebar and composer">
+            <Field label="Kit name">
               <Input
                 autoFocus
                 onChange={(event) => patch({ name: event.target.value })}
-                placeholder="Morning Ledger"
                 value={draft.name}
               />
             </Field>
-            <Field label="Publication name" hint="Printed as the brand mark">
+            <Field label="Publication name">
               <Input
                 onChange={(event) => patch({ publicationName: event.target.value })}
-                placeholder="THE MORNING LEDGER"
                 value={draft.publicationName ?? ""}
               />
             </Field>
           </div>
 
-          <Field label="Logo" hint="PNG with a transparent background works best">
-            <div className="flex items-center gap-3">
-              {draft.logoUrl ? (
-                <Thumb onRemove={() => patch({ logoUrl: undefined })} url={draft.logoUrl} />
-              ) : null}
-              <UploadButton
+          <Field label="Logo">
+            {draft.logoUrl ? (
+              <Tile onRemove={() => patch({ logoUrl: undefined })} url={draft.logoUrl} />
+            ) : (
+              <UploadTile
                 disabled={busy !== undefined}
-                label={draft.logoUrl ? "Replace" : "Upload logo"}
+                label="Upload"
                 onFiles={(files) => upload(files, ([url]) => patch({ logoUrl: url }))}
               />
-            </div>
+            )}
           </Field>
 
-          <Field label="Palette" hint="First color is the primary accent">
+          <Field label="Palette">
             <div className="flex flex-wrap items-center gap-2">
               {draft.colors.map((color, index) => (
                 <ColorChip
@@ -175,12 +198,13 @@ export function BrandKitDialog({
                     patch({ colors: draft.colors.map((c, i) => (i === index ? next : c)) })
                   }
                   onRemove={() => patch({ colors: draft.colors.filter((_, i) => i !== index) })}
+                  role={COLOR_ROLES[index]}
                 />
               ))}
-              {draft.colors.length < MAX_COLORS ? (
+              {draft.colors.length < COLOR_ROLES.length ? (
                 <button
                   aria-label="Add color"
-                  className="studio-button size-9 justify-center p-0"
+                  className="flex size-9 items-center justify-center rounded-full border border-dashed text-muted-foreground transition-colors duration-[var(--duration-fast)] hover:bg-accent hover:text-foreground"
                   onClick={() => patch({ colors: [...draft.colors, "#888888"] })}
                   type="button"
                 >
@@ -192,70 +216,56 @@ export function BrandKitDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Headline font">
-              <Input
-                list={`${formId}-fonts`}
-                onChange={(event) => patch({ headingFont: event.target.value })}
-                placeholder="Oswald"
-                value={draft.headingFont ?? ""}
+              <OptionSelect
+                label="Headline font"
+                onChange={(headingFont) => patch({ headingFont })}
+                options={FONTS.map((font) => ({ id: font, label: font }))}
+                value={draft.headingFont}
               />
             </Field>
             <Field label="Body font">
-              <Input
-                list={`${formId}-fonts`}
-                onChange={(event) => patch({ bodyFont: event.target.value })}
-                placeholder="Inter"
-                value={draft.bodyFont ?? ""}
+              <OptionSelect
+                label="Body font"
+                onChange={(bodyFont) => patch({ bodyFont })}
+                options={FONTS.map((font) => ({ id: font, label: font }))}
+                value={draft.bodyFont}
               />
             </Field>
-            <datalist id={`${formId}-fonts`}>
-              {["Oswald", "Bebas Neue", "Futura", "Gotham", "Inter", "Roboto", "Playfair Display", "Georgia", "Didot", "IBM Plex Sans", "Space Grotesk", "Source Serif"].map(
-                (font) => (
-                  <option key={font} value={font} />
-                ),
-              )}
-            </datalist>
           </div>
 
-          <Field label="Default style">
-            <select
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              onChange={(event) =>
-                patch({ preferredStyle: event.target.value === "auto" ? "" : event.target.value })
-              }
-              value={draft.preferredStyle || "auto"}
-            >
-              {STYLES.map((style) => (
-                <option key={style.id} value={style.id}>
-                  {style.id === "auto" ? "Let Plate choose" : style.label}
-                </option>
-              ))}
-            </select>
+          <Field label="Style">
+            <OptionSelect
+              label="Style"
+              onChange={(preferredStyle) => patch({ preferredStyle })}
+              options={STYLES.filter((style) => style.id !== "auto").map((style) => ({
+                id: style.id,
+                label: style.label,
+              }))}
+              value={draft.preferredStyle}
+            />
           </Field>
 
-          <Field label="House style notes" hint="Tone, texture, what to avoid">
+          <Field label="House style notes">
             <Textarea
               onChange={(event) => patch({ notes: event.target.value })}
-              placeholder="Warm paper texture, generous whitespace, never use gradients, headlines in all caps."
               rows={3}
               value={draft.notes ?? ""}
             />
           </Field>
 
-          <Field
-            label={`Past graphics (${draft.referenceUrls.length}/${MAX_REFERENCES})`}
-            hint="New graphics match their look, never their content"
-          >
+          <Field label="References">
             <div className="flex flex-wrap gap-2">
               {draft.referenceUrls.map((url) => (
-                <Thumb
+                <Tile
                   key={url}
-                  large
-                  onRemove={() => patch({ referenceUrls: draft.referenceUrls.filter((u) => u !== url) })}
+                  onRemove={() =>
+                    patch({ referenceUrls: draft.referenceUrls.filter((u) => u !== url) })
+                  }
                   url={url}
                 />
               ))}
               {draft.referenceUrls.length < MAX_REFERENCES ? (
-                <UploadButton
+                <UploadTile
                   disabled={busy !== undefined}
                   label="Add"
                   multiple
@@ -266,7 +276,6 @@ export function BrandKitDialog({
                       }),
                     )
                   }
-                  tall
                 />
               ) : null}
             </div>
@@ -307,23 +316,44 @@ export function BrandKitDialog({
   );
 }
 
-function Field({
-  children,
-  hint,
-  label,
-}: {
-  readonly children: React.ReactNode;
-  readonly hint?: string;
-  readonly label: string;
-}) {
+function Field({ children, label }: { readonly children: React.ReactNode; readonly label: string }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="shrink-0 font-medium text-sm">{label}</span>
-        {hint ? <span className="min-w-0 truncate text-muted-foreground text-xs">{hint}</span> : null}
-      </div>
+      <span className="block font-medium text-sm">{label}</span>
       {children}
     </div>
+  );
+}
+
+/** shadcn Select with an "Auto" default; undefined means auto. */
+function OptionSelect({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  readonly label: string;
+  readonly onChange: (value: string | undefined) => void;
+  readonly options: readonly { id: string; label: string }[];
+  readonly value?: string;
+}) {
+  return (
+    <Select
+      onValueChange={(next) => next && onChange(next === AUTO ? undefined : next)}
+      value={value && options.some((option) => option.id === value) ? value : AUTO}
+    >
+      <SelectTrigger aria-label={label} className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="max-h-72" position="popper">
+        <SelectItem value={AUTO}>Auto</SelectItem>
+        {options.map((option) => (
+          <SelectItem key={option.id} value={option.id}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -331,26 +361,33 @@ function ColorChip({
   color,
   onChange,
   onRemove,
+  role,
 }: {
   readonly color: string;
   readonly onChange: (color: string) => void;
   readonly onRemove: () => void;
+  readonly role?: string;
 }) {
   return (
-    <span className="group relative flex items-center gap-1.5 rounded-full border py-1 pr-2 pl-1">
-      <label className="relative size-7 cursor-pointer overflow-hidden rounded-full border border-white/20">
+    <span className="flex items-center gap-2 rounded-full border py-1 pr-1.5 pl-1">
+      <label className="relative size-7 shrink-0 cursor-pointer overflow-hidden rounded-full border border-white/20">
         <span className="absolute inset-0" style={{ background: color }} />
         <input
-          aria-label={`Color ${color}`}
+          aria-label={`${role} color`}
           className="absolute inset-0 cursor-pointer opacity-0"
           onChange={(event) => onChange(event.target.value)}
           type="color"
           value={color}
         />
       </label>
-      <span className="font-mono text-xs uppercase tabular-nums">{color}</span>
+      <span className="flex flex-col leading-tight">
+        <span className="text-xs">{role}</span>
+        <span className="font-mono text-[10px] text-muted-foreground uppercase tabular-nums">
+          {color}
+        </span>
+      </span>
       <button
-        aria-label={`Remove ${color}`}
+        aria-label={`Remove ${role} color`}
         className="flex size-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
         onClick={onRemove}
         type="button"
@@ -361,22 +398,11 @@ function ColorChip({
   );
 }
 
-function Thumb({
-  large,
-  onRemove,
-  url,
-}: {
-  readonly large?: boolean;
-  readonly onRemove: () => void;
-  readonly url: string;
-}) {
+const TILE = "relative flex size-20 shrink-0 overflow-hidden rounded-md border";
+
+function Tile({ onRemove, url }: { readonly onRemove: () => void; readonly url: string }) {
   return (
-    <span
-      className={cn(
-        "relative block overflow-hidden rounded-md border bg-muted",
-        large ? "h-24 w-20" : "size-12",
-      )}
-    >
+    <span className={cn(TILE, "bg-muted")}>
       {/* biome-ignore lint/performance/noImgElement: user-uploaded brand asset */}
       <img alt="" className="size-full object-cover object-top" src={url} />
       <button
@@ -391,26 +417,24 @@ function Thumb({
   );
 }
 
-function UploadButton({
+function UploadTile({
   disabled,
   label,
   multiple,
   onFiles,
-  tall,
 }: {
   readonly disabled: boolean;
   readonly label: string;
   readonly multiple?: boolean;
   readonly onFiles: (files: FileList | null) => void;
-  readonly tall?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
       <button
         className={cn(
-          "studio-button border-dashed",
-          tall && "h-24 w-20 flex-col justify-center rounded-md",
+          TILE,
+          "flex-col items-center justify-center gap-1 border-dashed text-muted-foreground text-xs transition-colors duration-[var(--duration-fast)] hover:bg-accent hover:text-foreground disabled:opacity-50",
         )}
         disabled={disabled}
         onClick={() => input.current?.click()}

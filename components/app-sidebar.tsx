@@ -176,7 +176,7 @@ function NavChats({
       <SidebarMenu>
         {chats.length === 0 ? (
           <p className="px-2 py-1 text-sidebar-foreground/60 text-xs">
-            Your chats appear here. They are remembered in this browser.
+            No chats yet
           </p>
         ) : null}
         {chats.slice(0, visible).map((chat) => (
@@ -470,9 +470,7 @@ function TrashDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Trash</DialogTitle>
-          <DialogDescription>
-            Chats you moved to trash. Deleting removes them from this browser&apos;s list.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Chats moved to trash</DialogDescription>
         </DialogHeader>
         {chats.length === 0 ? (
           <p className="text-muted-foreground text-sm">Trash is empty.</p>
