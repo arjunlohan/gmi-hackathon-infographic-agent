@@ -14,6 +14,8 @@ import {
   PenLineIcon,
   ScanSearchIcon,
   ShieldCheckIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -25,12 +27,16 @@ import {
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 // Mirrors RenderResult in agent/lib/render.ts.
 type Review = {
   verdict: "publish" | "fix";
   score: number;
+  // Absent on renders from before the checklist reviewer.
+  checks?: { total: number; passed: number };
+  defects?: { kind: string; message: string }[];
   wrongOrMissing: { expected: string; found: string }[];
   invented: string[];
   encodingIssues: string[];
@@ -52,6 +58,7 @@ export type RenderResult = {
   review?: Review;
   reviewError?: string;
   passes?: { pass: number }[];
+  qaId?: string;
 };
 
 const FORMAT_RATIO: Record<string, string> = {
@@ -307,6 +314,11 @@ function ReviewBadge({ output }: { readonly output: RenderResult }) {
         <AlertTriangleIcon className="size-3.5" />
       )}
       {passed ? "Fact-checked" : "Needs attention"}
+      {review.checks ? (
+        <span className="opacity-70">
+          · {review.checks.passed}/{review.checks.total}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -314,13 +326,15 @@ function ReviewBadge({ output }: { readonly output: RenderResult }) {
 function CardFooter({ output }: { readonly output: RenderResult }) {
   const [copied, setCopied] = useState(false);
   const review = output.review;
-  const factual = review
-    ? [
-        ...review.wrongOrMissing.map((item) => `Expected "${item.expected}", found "${item.found}"`),
-        ...review.invented.map((item) => `Not in the brief: "${item}"`),
-        ...review.encodingIssues,
-      ]
-    : [];
+  const factual = review?.defects
+    ? [...new Set(review.defects.map((defect) => defect.message))]
+    : review
+      ? [
+          ...review.wrongOrMissing.map((item) => `Expected "${item.expected}", found "${item.found}"`),
+          ...review.invented.map((item) => `Not in the brief: "${item}"`),
+          ...review.encodingIssues,
+        ]
+      : [];
   const design = review?.designIssues ?? [];
   const passCount = output.passes?.length ?? 1;
 
@@ -376,6 +390,92 @@ function CardFooter({ output }: { readonly output: RenderResult }) {
           {passCount === 1 ? "Checked in 1 pass" : `Refined over ${passCount} passes`}
         </span>
       </div>
+      <Feedback output={output} />
+    </div>
+  );
+}
+
+/**
+ * Was the graphic right? Ratings and notes are stored with the render's QA record; they are
+ * the ground truth the automated fact-check is measured against.
+ */
+function Feedback({ output }: { readonly output: RenderResult }) {
+  const [state, setState] = useState<"idle" | "explain" | "sending" | "sent" | "error">("idle");
+  const [note, setNote] = useState("");
+  if (!output.qaId) return null;
+
+  const send = async (rating: "up" | "down", text?: string) => {
+    setState("sending");
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qaId: output.qaId,
+          draftId: output.draftId,
+          imageUrl: output.imageUrl,
+          rating,
+          note: text?.trim() || undefined,
+        }),
+      });
+      setState(response.ok ? "sent" : "error");
+    } catch {
+      setState("error");
+    }
+  };
+
+  if (state === "sent") {
+    return <p className="text-muted-foreground text-xs">Thanks. Your rating is saved with this draft's fact-check.</p>;
+  }
+
+  if (state === "explain" || (state === "sending" && note)) {
+    return (
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void send("down", note);
+        }}
+      >
+        <Input
+          aria-label="What is wrong with this graphic?"
+          autoFocus
+          className="h-8 text-sm"
+          maxLength={600}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="What's wrong? e.g. Brazil should read 3.39"
+          value={note}
+        />
+        <Button className="rounded-full" disabled={state === "sending"} size="sm" type="submit">
+          Send
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 text-muted-foreground text-xs">
+      <span className="mr-1">{state === "error" ? "Could not save. Try again:" : "Is this graphic accurate?"}</span>
+      <Button
+        aria-label="Yes, it is accurate"
+        disabled={state === "sending"}
+        onClick={() => void send("up")}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <ThumbsUpIcon />
+      </Button>
+      <Button
+        aria-label="No, something is wrong"
+        disabled={state === "sending"}
+        onClick={() => setState("explain")}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <ThumbsDownIcon />
+      </Button>
     </div>
   );
 }

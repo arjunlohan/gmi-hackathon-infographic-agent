@@ -1,9 +1,9 @@
-import { defineTool } from "eve/tools";
+import { defineWorkflowTool } from "eve/tools";
 import { z } from "zod";
-import { getDraft } from "../lib/drafts";
-import { type RenderResult, renderWithQualityLoop, summarizeForModel } from "../lib/render";
+import { qualityLoop, type RenderResult, summarizeForModel } from "../lib/render";
+import { loadDraftStep } from "../lib/steps";
 
-export default defineTool({
+export default defineWorkflowTool({
   description:
     "Apply a small visual revision the user asked for to an existing draft (recolor an element, move or remove a callout, adjust a detail) using Hy Image 3.5 reference-guided editing, then run the same fact-check and fix loop. For wording, data, headline, format or style changes, use generate_infographic instead.",
   inputSchema: z.object({
@@ -19,24 +19,29 @@ export default defineTool({
     delta: (_input, partial: RenderResult) => partial.note ?? "Rendering",
     complete: (_input, output: RenderResult) =>
       output.review
-        ? `Draft ${output.draftId} · ${output.review.verdict === "publish" ? "fact-checked" : "needs attention"} (${output.review.score}/10)`
+        ? `Draft ${output.draftId} · ${output.review.verdict === "publish" ? "fact-checked" : "needs attention"} (${output.review.checks.passed}/${output.review.checks.total} checks)`
         : `Draft ${output.draftId} rendered`,
   },
   async *execute({ draftId, instruction }, ctx) {
-    const parent = getDraft(draftId);
-    yield* renderWithQualityLoop({
+    "use workflow";
+    const loaded = await loadDraftStep(ctx.session.id, draftId);
+    if ("error" in loaded) throw new Error(loaded.error);
+    const parent = loaded.draft;
+    return yield* qualityLoop({
       basePrompt: parent.basePrompt,
       size: parent.size,
-      textContract: parent.textContract,
-      dataSummary: parent.dataSummary,
-      callouts: parent.callouts,
+      qa: loaded.plan,
+      policy: loaded.policy,
+      meta: parent.meta,
       referenceImages: parent.referenceImages ?? [],
       fileName: parent.fileName ?? "infographic",
-      startFrom: { imageUrl: parent.imageUrl, instruction, parentId: parent.id },
-      signal: ctx.abortSignal,
+      // Revise the render itself; connectors are redrawn for the result.
+      startFrom: { imageUrl: parent.baseImageUrl ?? parent.imageUrl, instruction, parentId: parent.id },
+      sessionId: ctx.session.id,
+      qaId: `${ctx.session.id}:${ctx.callId}`,
     });
   },
-  toModelOutput(output) {
+  toModelOutput(output: RenderResult) {
     return { type: "text", value: summarizeForModel(output) };
   },
 });

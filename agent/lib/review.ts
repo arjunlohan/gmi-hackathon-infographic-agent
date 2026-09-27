@@ -1,72 +1,130 @@
-// Vision QA pass: Muse Spark looks at the rendered image in a clean context and checks it
-// against the text contract and the data. Image models misspell, drop, and invent labels;
-// this is the guard that keeps wrong numbers out of a published infographic.
+// Vision QA pass. Muse Spark is used only as eyes, never as the judge of its own reading:
+//   1. Transcribe: a blind read of every string with its position. It never sees the brief, so
+//      it cannot echo the text it was told to expect (the classic VLM-judge failure).
+//   2. Inspect: where callout pointers end, which of two marks is bigger, and design notes.
+//   3. Re-read: disputed strings are cropped, zoomed and read again before they count.
+// Code (agent/lib/qa.ts) does every comparison and decides the verdict: publish only when every
+// check passes.
 
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import type { CalloutCheck } from "./infographic";
+import {
+  type Box,
+  checkComparisons,
+  checkPointers,
+  checkReferenceLines,
+  type Defect,
+  type Located,
+  matchTranscription,
+  type PointerVerdict,
+  norm,
+  type QaPlan,
+  type Transcribed,
+} from "./qa";
 
 export const REVIEW_MODEL = "meta/muse-spark-1.3-contributor";
 
-export const reviewSchema = z.object({
-  observedText: z
-    .array(z.string())
-    .describe(
-      "Transcription of EVERY readable piece of text on the image, top to bottom, left to right, exactly as rendered (including typos, duplicates and stray words). Do this before judging.",
-    ),
-  annotations: z
-    .array(
-      z.object({
-        text: z.string().describe("The callout or annotation text as rendered"),
-        pointsTo: z
-          .string()
-          .describe(
-            "The data label of the row, bar, segment or point that this callout's pointer, tail, leader line or dot indicates: follow it to its tip. If the tip touches a data mark, name that mark. If the tip stops in empty space, name the row, bar or point level with the tip (same height for horizontal bars, same position for columns). 'none' only when the callout has no pointer at all.",
-          ),
-      }),
-    )
-    .describe("Every callout, speech bubble or annotation note on the image, with what it points at"),
-  verdict: z
-    .enum(["publish", "fix"])
-    .describe("'publish' only if every data value and headline is correct and nothing is invented"),
-  score: z.number().min(1).max(10).describe("Overall publication quality, 10 = Visual Capitalist grade"),
-  wrongOrMissing: z
-    .array(z.object({ expected: z.string(), found: z.string() }))
-    .describe("Required strings that are misspelled, wrong, or absent ('found' = 'missing' when absent)"),
-  invented: z
-    .array(z.string())
-    .describe("Every observed word, number or label that is not part of a required string (for example stray labels, placeholder words, extra statistics)"),
-  encodingIssues: z
-    .array(z.string())
-    .describe("Bar/area/color encodings that contradict the data: wrong order, wrong proportions, wrong color band"),
-  designIssues: z.array(z.string()).describe("Legibility, overlap, cropping, clutter"),
-  editInstruction: z
-    .string()
-    .describe(
-      "One precise edit instruction for an image-editing model that fixes the most important problems while keeping everything else identical. Empty string when verdict is 'publish'.",
-    ),
+// sharp is a native module; load it lazily so a missing binary only disables the zoomed
+// re-read and drift metric instead of the whole agent.
+const loadSharp = () => import("sharp").then((module) => module.default);
+
+const DESIGN_GRADES = ["unpublishable", "major_fixes", "minor_fixes", "polish_only", "ship"] as const;
+type DesignGrade = (typeof DESIGN_GRADES)[number];
+const GRADE_SCORE: Record<DesignGrade, number> = {
+  unpublishable: 2,
+  major_fixes: 4,
+  minor_fixes: 6,
+  polish_only: 8,
+  ship: 10,
+};
+
+export type Review = {
+  // 'publish' only when every factual check passed.
+  verdict: "publish" | "fix";
+  // Design quality from a labeled grade (1-10); never used to decide publish.
+  score: number;
+  checks: { total: number; passed: number };
+  defects: Defect[];
+  // Views of `defects` kept for the UI and the agent.
+  wrongOrMissing: { expected: string; found: string }[];
+  invented: string[];
+  encodingIssues: string[];
+  designIssues: string[];
+  // Literal edit lines for the image editor, most important first. Empty when publishable.
+  editInstruction: string;
+  // Where each brief string was found and where callout pointers end; used to draw connectors.
+  positions: Located[];
+  // Each callout's own pointer: true if it ends on its anchor, false if not, null if it has none.
+  pointers: PointerVerdict[];
+};
+
+const transcriptionSchema = z.object({
+  texts: z.array(
+    z.object({
+      text: z.string().describe("Exactly as drawn, letter by letter; never corrected"),
+      box: z
+        .array(z.number())
+        .length(4)
+        .describe("[left, top, right, bottom] in 0-1000 coordinates of the image"),
+      role: z.enum(["heading", "label", "value", "legend", "annotation", "footer", "axis", "logo", "decoration", "other"]),
+      malformed: z
+        .boolean()
+        .describe("True when any character is warped, fused with another, missing strokes, or not a real letter"),
+    }),
+  ),
 });
 
-export type Review = z.infer<typeof reviewSchema>;
+const inspectionSchema = z.object({
+  pointers: z
+    .array(
+      z.object({
+        callout: z.string().describe("The callout's opening words as drawn"),
+        pointsTo: z
+          .string()
+          .describe("The data label nearest the pointer's tip, or 'none' when the callout has no pointer, arrow or leader line"),
+        tip: z
+          .array(z.number())
+          .describe("[x, y] of the very end of the pointer or arrowhead, in 0-1000 image coordinates; empty when there is no pointer"),
+      }),
+    )
+    .describe("One entry per callout or annotation box"),
+  comparisons: z.array(
+    z.object({ id: z.number(), answer: z.enum(["first", "second", "same", "unclear"]) }),
+  ),
+  referenceLines: z
+    .array(
+      z.object({
+        orientation: z.enum(["vertical", "horizontal"]),
+        where: z.string().describe("Where it runs, in a few words, e.g. 'through the bars just right of the 499 value'"),
+      }),
+    )
+    .describe(
+      "Long lines across the chart that mark an average, target, median or threshold. Not gridlines, axes, bar edges, dashed row separators, or callout arrows.",
+    ),
+  unlabeledMarks: z
+    .array(z.string().describe("Where it is, e.g. 'an extra bar below the last row'"))
+    .describe("Bars, columns, segments, tiles or dots in the chart that have no label and no value of their own"),
+  designIssues: z
+    .array(z.string())
+    .describe("Legibility, overlap, cropping, clutter, weak hierarchy; one short sentence each"),
+  designGrade: z.enum(DESIGN_GRADES),
+});
 
-export async function reviewInfographic(
-  input: {
-    imageUrl: string;
-    textContract: string[];
-    dataSummary: string;
-    callouts?: CalloutCheck[];
-  },
-  signal?: AbortSignal,
-): Promise<Review> {
-  const image = await fetch(input.imageUrl, { signal });
-  if (!image.ok) throw new Error(`Could not download image for review (${image.status}).`);
-  const bytes = new Uint8Array(await image.arrayBuffer());
+async function loadImage(url: string, signal?: AbortSignal): Promise<{ bytes: Uint8Array; mediaType: string }> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Could not download image for review (${response.status}).`);
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mediaType: response.headers.get("content-type") ?? "image/png",
+  };
+}
 
+async function transcribe(image: { bytes: Uint8Array; mediaType: string }, signal?: AbortSignal): Promise<Transcribed[]> {
   const { output } = await generateText({
     model: REVIEW_MODEL,
     reasoning: "low",
     abortSignal: signal,
-    output: Output.object({ schema: reviewSchema }),
+    output: Output.object({ schema: transcriptionSchema }),
     messages: [
       {
         role: "user",
@@ -74,99 +132,274 @@ export async function reviewInfographic(
           {
             type: "text",
             text: [
-              "You are the fact-checking editor at a data-journalism desk. Inspect this infographic, zoom into every label, and compare it with the brief.",
-              "",
-              "REQUIRED TEXT (each must appear verbatim, legible, exactly once):",
-              ...input.textContract.map((text) => `- ${text}`),
-              "",
-              "DATA THE GRAPHIC MUST ENCODE:",
-              input.dataSummary,
-              "",
-              "Method: first transcribe every readable string into observedText. Then diff it against the required text:",
-              "- wrongOrMissing: a required string that is absent, misspelled, or shows a different number or name. If only the unit suffix or formatting differs and the number is identical (for example '23.2' for '23.2M' when the unit is stated elsewhere), put it once in designIssues instead.",
-              "- invented: observed text that corresponds to no required string (stray labels, placeholder words, extra statistics). Never list a variant of a required string here; it belongs in exactly one list.",
-              "- Rank prefixes (1., 2., ...) are acceptable. Tick numbers are acceptable only on a real axis of the chart; numbers in decorative illustrations (rulers, graph paper, doodles) are invented.",
-              "- annotations: for every callout box or speech bubble, trace its pointer, tail or leader line to its tip and name the data element the tip indicates: the mark it touches, or, if it stops in empty space, the row level with the tip. Judge by the tip, not by where the box sits, and never assume the callout points where its text says.",
-              "- Encoding: measure bar lengths (or areas) against each other. Ratios should match the data ratios within about 10% on a zero baseline; a visibly truncated or inconsistent scale goes in encodingIssues.",
-              "Verdict 'fix' only for factual problems: wrongOrMissing or invented non-empty, or an encoding that misrepresents the data. Formatting and design issues alone still get 'publish' with a lower score.",
-              "Be strict about numbers, names and stray text; they are what make an infographic untrustworthy. Ignore decorative background texture that contains no readable words.",
+              "Transcribe every piece of readable text in this image exactly as it is drawn, letter by letter and digit by digit.",
+              "- Do not correct spelling, do not complete cut-off or garbled words, do not normalize numbers or units. A typo in the image must stay a typo in your answer.",
+              "- One entry per separate text element (a title, one label, one value, one legend entry, one note, one footer line). Never merge a label with its value. If the same text is drawn twice, list it twice.",
+              "- Mark malformed = true when any character is warped, fused, missing strokes, or not a real letter.",
+              "- Role 'decoration' is for text that is part of an illustration or background texture (chalk formulas, printed props); skip faint texture that cannot be read.",
             ].join("\n"),
           },
-          { type: "file", mediaType: image.headers.get("content-type") ?? "image/png", data: bytes },
+          { type: "file", mediaType: image.mediaType, data: image.bytes },
         ],
       },
     ],
   });
-
-  return checkCallouts(sanitizeReview(output, input.textContract), input.callouts ?? []);
+  return output.texts.map((item) => ({ ...item, box: item.box as Box }));
 }
 
-const normalize = (text: string) =>
-  text.normalize("NFKC").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\s+/g, " ").trim().toLowerCase();
-
-/**
- * Remove self-contradicting findings the vision model sometimes emits ("expected X, found X",
- * or a required string listed as invented) so they never trigger a needless fix pass.
- */
-export function sanitizeReview(review: Review, textContract: string[]): Review {
-  const required = new Set(textContract.map(normalize));
-  const wrongOrMissing = review.wrongOrMissing.filter(
-    (item) => normalize(item.expected) !== normalize(item.found),
+async function inspect(
+  image: { bytes: Uint8Array; mediaType: string },
+  plan: QaPlan,
+  signal?: AbortSignal,
+): Promise<z.infer<typeof inspectionSchema>> {
+  const questions = plan.comparisons.map(
+    (pair, id) => `${id}. Which is drawn bigger: the "${pair.first}" ${plan.markNoun} (first) or the "${pair.second}" ${plan.markNoun} (second)?`,
   );
-  const invented = review.invented.filter((item) => !required.has(normalize(item)));
-  const dropped =
-    review.wrongOrMissing.length - wrongOrMissing.length + review.invented.length - invented.length;
-  const clean = wrongOrMissing.length === 0 && invented.length === 0 && review.encodingIssues.length === 0;
-  return {
-    ...review,
-    wrongOrMissing,
-    invented,
-    verdict: dropped > 0 && clean ? "publish" : review.verdict,
-    editInstruction: dropped > 0 && clean ? "" : review.editInstruction,
-  };
+  const { output } = await generateText({
+    model: REVIEW_MODEL,
+    reasoning: "low",
+    abortSignal: signal,
+    output: Output.object({ schema: inspectionSchema }),
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: [
+              "You are the design editor of a data-journalism desk looking at a finished infographic. Spelling and numbers are checked separately; report only what is asked.",
+              plan.labels.length ? `Data labels on this chart: ${plan.labels.map((label) => `"${label}"`).join(", ")}.` : "",
+              "",
+              "pointers: for every callout box or speech bubble, follow its pointer, arrow, tail or leader line to its very end and give that point's coordinates, plus the data label nearest it. Judge by where the line ends, never by where the box sits or what its text says.",
+              questions.length
+                ? `comparisons: judge by the drawn length or area only, not the printed numbers. Answer 'same' only if they look equal.\n${questions.join("\n")}`
+                : "comparisons: return an empty list.",
+              "referenceLines: every long line across the chart that marks an average, target, median or threshold value. Empty when there are none.",
+              "unlabeledMarks: every data mark (bar, column, segment, tile, dot) with no label and no value of its own, such as an extra bar at the end of the chart. Empty when every mark is labeled.",
+              "designIssues: legibility, overlapping or cut-off elements, clutter, weak hierarchy. Empty when there are none.",
+              "designGrade: how close this is to a Visual Capitalist or Economist graphic, ignoring spelling.",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+          { type: "file", mediaType: image.mediaType, data: image.bytes },
+        ],
+      },
+    ],
+  });
+  return output;
 }
 
-const NO_POINTER = new Set(["", "none", "no pointer", "nothing", "n/a"]);
-
 /**
- * A callout that points at the wrong row misstates the data as surely as a wrong number, so a
- * mismatch between where a pointer ends and the spec's anchor is a factual issue. The vision
- * model only reports what each pointer touches; the comparison happens here.
+ * Crop each disputed string with generous margins, zoom it, and read it again blind. A
+ * misspelling or malformed glyph only counts when the zoomed read agrees.
  */
-export function checkCallouts(review: Review, callouts: CalloutCheck[]): Review {
-  const issues: string[] = [];
-  for (const callout of callouts) {
-    const observed = review.annotations.find((item) => sameCallout(item.text, callout.text));
-    if (!observed) continue; // a missing callout is already a wrongOrMissing finding
-    const target = normalize(observed.pointsTo).replace(/^(the )?/, "");
-    if (callout.anchor) {
-      const anchor = normalize(callout.anchor);
-      if (!NO_POINTER.has(target) && !target.includes(anchor) && !anchor.includes(target)) {
-        issues.push(
-          `The callout "${callout.text}" points at "${observed.pointsTo}"; its pointer must end on "${callout.anchor}".`,
-        );
-      }
-    } else if (!NO_POINTER.has(target)) {
-      issues.push(
-        `The callout "${callout.text}" is a general statement but points at "${observed.pointsTo}"; remove its pointer or leader line.`,
-      );
+async function reread(
+  image: { bytes: Uint8Array },
+  boxes: Box[],
+  signal?: AbortSignal,
+): Promise<{ text: string; malformed: boolean }[]> {
+  const sharp = await loadSharp();
+  const { width = 0, height = 0 } = await sharp(image.bytes).metadata();
+  if (!width || !height) return [];
+  const crops = await Promise.all(
+    boxes.map(async (box) => {
+      const [l, t, r, b] = box.map((v) => Math.min(1000, Math.max(0, v)) / 1000);
+      const padX = Math.max(0.02, (r - l) * 0.2);
+      const padY = Math.max(0.015, (b - t) * 0.6);
+      const left = Math.floor(Math.max(0, l - padX) * width);
+      const top = Math.floor(Math.max(0, t - padY) * height);
+      const cropWidth = Math.max(8, Math.min(width - left, Math.ceil((r - l + 2 * padX) * width)));
+      const cropHeight = Math.max(8, Math.min(height - top, Math.ceil((b - t + 2 * padY) * height)));
+      const scale = Math.min(4, Math.max(1, 160 / cropHeight));
+      const png = await sharp(image.bytes)
+        .extract({ left, top, width: cropWidth, height: cropHeight })
+        .resize({ width: Math.round(cropWidth * scale), kernel: "lanczos3" })
+        .png()
+        .toBuffer();
+      return new Uint8Array(png);
+    }),
+  );
+  const { output } = await generateText({
+    model: REVIEW_MODEL,
+    reasoning: "low",
+    abortSignal: signal,
+    output: Output.object({
+      schema: z.object({
+        readings: z.array(z.object({ id: z.number(), text: z.string(), malformed: z.boolean() })),
+      }),
+    }),
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `Here are ${crops.length} zoomed crops from one image, numbered from 0. For each, transcribe the main text in the middle of the crop exactly as drawn, letter by letter, without correcting anything; ignore partial text cut off at the edges. malformed = true when any character is warped, fused, missing strokes, or not a real letter.`,
+          },
+          ...crops.flatMap((data, id) => [
+            { type: "text" as const, text: `Crop ${id}:` },
+            { type: "file" as const, mediaType: "image/png", data },
+          ]),
+        ],
+      },
+    ],
+  });
+  return crops.map((_, id) => {
+    const reading = output.readings.find((item) => item.id === id);
+    return { text: reading?.text ?? "", malformed: reading?.malformed ?? false };
+  });
+}
+
+const squash = (text: string) => norm(text).replace(/\s/g, "");
+
+export async function reviewInfographic(
+  input: { imageUrl: string; plan: QaPlan },
+  signal?: AbortSignal,
+): Promise<Review> {
+  const { plan } = input;
+  const image = await loadImage(input.imageUrl, signal);
+  const [texts, inspection] = await Promise.all([transcribe(image, signal), inspect(image, plan, signal)]);
+
+  const matched = matchTranscription(texts, plan);
+  const pointerCheck = checkPointers(inspection.pointers, plan.callouts, matched.positions);
+  let defects = [
+    ...matched.defects,
+    ...pointerCheck.defects,
+    ...checkReferenceLines(inspection.referenceLines),
+    ...inspection.unlabeledMarks.map(
+      (where): Defect => ({
+        kind: "invented",
+        severity: 3,
+        found: `unlabeled mark (${where})`,
+        message: `A data mark with no label is drawn: ${where}.`,
+        fix: `Erase ${where}, filling in the background; keep every labeled bar, label and value exactly as it is.`,
+      }),
+    ),
+    ...checkComparisons(inspection.comparisons, plan),
+  ];
+
+  // Settle disputed readings on a zoomed crop before they cost a fix pass.
+  const disputed = defects.filter(
+    (defect): defect is Defect & { box: Box } =>
+      (defect.kind === "misspelled" || defect.kind === "malformed") && Boolean(defect.box),
+  ).slice(0, 8);
+  if (disputed.length) {
+    try {
+      const readings = await reread(image, disputed.map((defect) => defect.box), signal);
+      const cleared = new Set<Defect>();
+      disputed.forEach((defect, i) => {
+        const reading = readings[i];
+        if (!reading?.text) return;
+        if (defect.kind === "misspelled" && squash(reading.text) === squash(defect.expected ?? "") && !reading.malformed) {
+          cleared.add(defect);
+        }
+        if (defect.kind === "malformed" && !reading.malformed) cleared.add(defect);
+      });
+      defects = defects.filter((defect) => !cleared.has(defect));
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      // Keep the findings from the full read.
     }
   }
-  if (issues.length === 0) return review;
+
+  defects.sort((a, b) => b.severity - a.severity);
+  // One check per contract string, layout rule, comparison and callout, plus "no stray text".
+  const total = matched.checks + plan.comparisons.length + plan.callouts.length + 1;
+  const failing =
+    defects.filter((defect) => defect.kind !== "invented").length +
+    (defects.some((defect) => defect.kind === "invented") ? 1 : 0);
+  const verdict = defects.length === 0 ? "publish" : "fix";
+  const score = Math.min(GRADE_SCORE[inspection.designGrade], verdict === "fix" ? 6 : 10);
+
   return {
-    ...review,
-    encodingIssues: [...review.encodingIssues, ...issues],
-    verdict: "fix",
-    editInstruction: [review.editInstruction, ...issues].filter(Boolean).join(" "),
+    verdict,
+    score,
+    checks: { total, passed: Math.max(0, total - failing) },
+    defects,
+    wrongOrMissing: defects
+      .filter((defect) => defect.kind === "misspelled" || defect.kind === "missing")
+      .map((defect) => ({ expected: defect.expected ?? "", found: defect.found ?? "missing" })),
+    invented: defects.filter((defect) => defect.kind === "invented").map((defect) => defect.found ?? ""),
+    encodingIssues: defects
+      .filter((defect) => !["misspelled", "missing", "invented"].includes(defect.kind))
+      .map((defect) => defect.message),
+    designIssues: [...inspection.designIssues, ...matched.formatNotes],
+    editInstruction: defects.map((defect) => defect.fix).join("\n"),
+    positions: matched.positions,
+    pointers: pointerCheck.verdicts,
   };
 }
 
-/** Rendered callout text is matched to the spec loosely: same opening words, or most words. */
-function sameCallout(observed: string, expected: string): boolean {
-  const a = normalize(observed);
-  const b = normalize(expected);
-  if (a.includes(b.slice(0, 24)) || b.includes(a.slice(0, 24))) return true;
-  const words = new Set(a.split(" "));
-  const shared = b.split(" ").filter((word) => words.has(word)).length;
-  return shared / Math.max(1, b.split(" ").length) >= 0.6;
+
+/**
+ * Tie-break between two drafts that are equally correct: ask which is more polished, in both
+ * orders, and trust the answer only when the two agree (VLM judges favor whichever comes first).
+ */
+export async function preferPolished(
+  a: string,
+  b: string,
+  signal?: AbortSignal,
+): Promise<"a" | "b" | undefined> {
+  const [imageA, imageB] = await Promise.all([loadImage(a, signal), loadImage(b, signal)]);
+  const ask = async (first: typeof imageA, second: typeof imageA) => {
+    const { output } = await generateText({
+      model: REVIEW_MODEL,
+      reasoning: "low",
+      abortSignal: signal,
+      output: Output.object({ schema: z.object({ better: z.enum(["first", "second"]) }) }),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Two drafts of the same infographic. Which one is more polished and legible for publication: cleaner typography, no overlaps, clearer hierarchy? Ignore any differences in wording.",
+            },
+            { type: "text", text: "First:" },
+            { type: "file", mediaType: first.mediaType, data: first.bytes },
+            { type: "text", text: "Second:" },
+            { type: "file", mediaType: second.mediaType, data: second.bytes },
+          ],
+        },
+      ],
+    });
+    return output.better;
+  };
+  const [forward, backward] = await Promise.all([ask(imageA, imageB), ask(imageB, imageA)]);
+  if (forward === "first" && backward === "second") return "a";
+  if (forward === "second" && backward === "first") return "b";
+  return undefined;
+}
+
+/**
+ * Mean pixel change between two renders outside the regions an edit was meant to touch
+ * (0 = identical, 1 = completely different). Logged for every edit so the "keep everything else
+ * identical" promise can be measured and a drift threshold calibrated from real data.
+ */
+export async function driftOutside(beforeUrl: string, afterUrl: string, boxes: Box[], signal?: AbortSignal): Promise<number> {
+  const size = 96;
+  const sharp = await loadSharp();
+  const [before, after] = await Promise.all(
+    [beforeUrl, afterUrl].map(async (url) => {
+      const { bytes } = await loadImage(url, signal);
+      return sharp(bytes).resize(size, size, { fit: "fill" }).greyscale().raw().toBuffer();
+    }),
+  );
+  const masked = (x: number, y: number) =>
+    boxes.some(([l, t, r, b]) => {
+      const px = ((x + 0.5) / size) * 1000;
+      const py = ((y + 0.5) / size) * 1000;
+      return px >= l - 40 && px <= r + 40 && py >= t - 40 && py <= b + 40;
+    });
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (masked(x, y)) continue;
+      sum += Math.abs(before[y * size + x] - after[y * size + x]);
+      count += 1;
+    }
+  }
+  return count ? Math.round((sum / count / 255) * 1000) / 1000 : 0;
 }

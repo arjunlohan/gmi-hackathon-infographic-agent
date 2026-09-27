@@ -1,13 +1,15 @@
 // Same-origin download proxy for rendered infographics. GMI serves outputs from a public GCS
 // bucket without CORS, so the browser cannot save them with a filename directly.
-// Only GMI's output bucket is allowed, so this cannot be used as an open proxy.
+// Only GMI's output bucket and our own composited renders are allowed, so this cannot be used
+// as an open proxy.
 
-const ALLOWED_PREFIX = "https://storage.googleapis.com/gmi-video-assests-prod/";
+const GMI_PREFIX = "https://storage.googleapis.com/gmi-video-assests-prod/";
+const RENDER_PATTERN = /^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com\/renders\//;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url") ?? "";
-  if (!url.startsWith(ALLOWED_PREFIX)) {
+  if (!url.startsWith(GMI_PREFIX) && !RENDER_PATTERN.test(url)) {
     return new Response("Unsupported image URL", { status: 400 });
   }
   const name = (searchParams.get("name") ?? "infographic.png").replace(/[^\w.-]/g, "_");

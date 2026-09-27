@@ -5,6 +5,9 @@
 import { z } from "zod";
 import { type BrandKit, brandKitDirection } from "./brand-kits";
 import type { HySize } from "./gmi";
+import type { CalloutCheck, ContractItem, QaPlan } from "./qa";
+
+export type { CalloutCheck } from "./qa";
 
 export const FORMATS = {
   portrait: { size: "1152x1536", label: "3:4 portrait, article body / blog post" },
@@ -70,9 +73,10 @@ type FormatKey = keyof typeof FORMATS;
 const FORMAT_KEYS = Object.keys(FORMATS) as [FormatKey, ...FormatKey[]];
 
 const dataPoint = z.object({
-  label: z.string().describe("Category or row name exactly as it should be printed, e.g. 'Russia'"),
+  label: z.string().max(40).describe("Category or row name exactly as it should be printed, e.g. 'Russia'"),
   value: z
     .string()
+    .max(16)
     .describe("Value exactly as it should be printed, with unit/format, e.g. '23.2M', '$864M', '612'"),
   numeric: z.number().optional().describe("Raw number used for proportions, e.g. 23.2"),
   group: z.string().optional().describe("Group / region / color category, if any"),
@@ -85,15 +89,16 @@ export const infographicSpecSchema = z.object({
       .map(([key, value]) => `${key}: ${value.label}`)
       .join("; "),
   ),
-  kicker: z.string().optional().describe("Small line above the headline, e.g. 'THE WORLD'S TOP' or 'RANKED:'"),
-  title: z.string().describe("Headline, 2-6 punchy words, e.g. 'Fertilizer Exporters'"),
+  kicker: z.string().max(40).optional().describe("Small line above the headline, e.g. 'THE WORLD'S TOP' or 'RANKED:'"),
+  title: z.string().max(48).describe("Headline, 2-6 punchy words, e.g. 'Fertilizer Exporters'"),
   accentWord: z.string().optional().describe("One word from the title to set in the accent color"),
   subtitle: z
     .string()
+    .max(130)
     .describe("Measure, unit, geography and year, e.g. 'Average PISA math score of 15-year-olds, 2025'"),
   chart: z.object({
     form: z.enum(FORM_KEYS),
-    unit: z.string().optional().describe("Unit note if not in subtitle, e.g. 'in USD billions'"),
+    unit: z.string().max(40).optional().describe("Unit note if not in subtitle, e.g. 'in USD billions'"),
     data: z
       .array(dataPoint)
       .max(40)
@@ -113,6 +118,15 @@ export const infographicSpecSchema = z.object({
     legend: z
       .array(z.object({ label: z.string(), color: z.string().describe("color name or hex") }))
       .optional(),
+    benchmark: z
+      .object({
+        label: z.string().max(40).describe("Printed label, e.g. 'OECD average: 463'"),
+        numeric: z.number().describe("The reference value on the same scale as the data, e.g. 463"),
+      })
+      .optional()
+      .describe(
+        "A reference value such as an average or target (ranked_bar, column, table, pictogram, timeline only). It is drawn exactly as a dashed rule between the items above and below it. Never describe reference or average lines in layoutNotes.",
+      ),
     layoutNotes: z
       .string()
       .optional()
@@ -123,6 +137,7 @@ export const infographicSpecSchema = z.object({
       z.object({
         text: z
           .string()
+          .max(110)
           .describe("The annotation as printed, a true statement from the source, e.g. 'Vietnam grows mostly robusta'"),
         anchor: z
           .string()
@@ -146,8 +161,8 @@ export const infographicSpecSchema = z.object({
       .optional()
       .describe("Topic-specific art direction layered on the preset: palette tweaks, material, texture, props, composition"),
   }),
-  source: z.string().describe("Source line, e.g. 'Source: FAO (2024)'"),
-  footnote: z.string().optional().describe("Short methodology note, one sentence"),
+  source: z.string().max(150).describe("Source line, e.g. 'Source: FAO (2024)'"),
+  footnote: z.string().max(220).optional().describe("Short methodology note, one sentence"),
   brandKitId: z
     .string()
     .optional()
@@ -159,28 +174,108 @@ export const infographicSpecSchema = z.object({
     .describe("Download file name: 1-3 lowercase words in kebab-case describing the graphic, e.g. 'fertilizer-exporters', 'ceo-pay'"),
   brandMark: z
     .string()
+    .max(40)
     .optional()
     .describe("Publisher or newsletter name for the bottom corner. Only when the user gave one; never a placeholder."),
 });
 
+
 export type InfographicSpec = z.infer<typeof infographicSpecSchema>;
 
-/** A callout and the data element its pointer must end on (none for a general statement). */
-export type CalloutCheck = { text: string; anchor?: string };
+/** What a render was asked to do, logged with every QA record so failures can be grouped. */
+export type RenderMeta = {
+  form: string;
+  format: string;
+  preset: string;
+  brandKitId?: string;
+  dataPoints: number;
+  strings: number;
+  words: number;
+};
 
 export type CompiledInfographic = {
   prompt: string;
   size: HySize;
-  // Style references (brand logo and past graphics) sent with every fresh render.
+  // Style references (brand logo) sent with every fresh render.
   referenceImages: string[];
   fileName: string;
-  // Every string that must appear on the image, verbatim. Used by the reviewer.
-  textContract: string[];
-  // Data the reviewer checks visual encoding against.
-  dataSummary: string;
-  // Where each callout must point. Used by the reviewer.
-  callouts: CalloutCheck[];
+  // What the reviewer checks the render against.
+  qa: QaPlan;
+  meta: RenderMeta;
 };
+
+// Printed-word budgets per canvas. Dense text is where image models misspell and drop words
+// (even Qwen-Image filtered dense and tiny text out of its training data), so a spec over budget
+// is sent back to the agent to trim before any render is spent on it.
+const WORD_BUDGET: Record<FormatKey, number> = { portrait: 200, square: 220, landscape: 220, tall: 260 };
+
+// Layout of the data labels, which decides the reviewer's order and placement checks.
+const FORM_LAYOUT: Partial<Record<FormKey, QaPlan["layout"]>> = {
+  ranked_bar: "rows",
+  table: "rows",
+  pictogram: "rows",
+  column: "columns",
+  timeline: "columns",
+  heatmap_matrix: "matrix",
+};
+
+// Forms whose marks encode magnitude by length or area, and what to call a mark.
+const MARK_NOUN: Partial<Record<FormKey, string>> = {
+  ranked_bar: "bar",
+  column: "column",
+  bubble: "circle",
+  treemap: "tile",
+  donut: "segment",
+  pictogram: "row of icons",
+};
+
+/**
+ * Normalize printed copy to plain characters. Image models spell from character-level text
+ * encoders, so curly quotes, Unicode minus signs, en or em dashes and non-breaking spaces are
+ * a cheap source of odd glyphs and false mismatches.
+ */
+export function cleanCopy(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(/[\u2018\u2019\u201a\u201b]/g, "'")
+    .replace(/[\u201c\u201d\u201e]/g, '"')
+    .replace(/\s*[\u2013\u2014]\s*/g, (match) => (match.trim() === match ? "-" : " - "))
+    .replace(/[\u2010\u2011\u2012\u2212]/g, "-")
+    .replace(/[\u00a0\u2007\u202f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanSpec(spec: InfographicSpec): InfographicSpec {
+  const c = (text?: string) => (text === undefined ? undefined : cleanCopy(text));
+  const { chart } = spec;
+  return {
+    ...spec,
+    kicker: c(spec.kicker),
+    title: cleanCopy(spec.title),
+    accentWord: c(spec.accentWord),
+    subtitle: cleanCopy(spec.subtitle),
+    source: cleanCopy(spec.source),
+    footnote: c(spec.footnote),
+    brandMark: c(spec.brandMark),
+    callouts: spec.callouts?.map((callout) => ({ text: cleanCopy(callout.text), anchor: c(callout.anchor) })),
+    chart: {
+      ...chart,
+      unit: c(chart.unit),
+      data: chart.data.map((point) => ({ ...point, label: cleanCopy(point.label), value: cleanCopy(point.value) })),
+      legend: chart.legend?.map((item) => ({ ...item, label: cleanCopy(item.label) })),
+      benchmark: chart.benchmark && { ...chart.benchmark, label: cleanCopy(chart.benchmark.label) },
+      matrix: chart.matrix && {
+        ...chart.matrix,
+        rowHeader: cleanCopy(chart.matrix.rowHeader),
+        columnHeader: cleanCopy(chart.matrix.columnHeader),
+        rows: chart.matrix.rows.map(cleanCopy),
+        columns: chart.matrix.columns.map(cleanCopy),
+        cells: chart.matrix.cells.map((row) => row.map(cleanCopy)),
+      },
+    },
+  };
+}
 
 /** Callouts with their anchors resolved to printed labels; an unknown anchor is a spec error. */
 function checkedCallouts(spec: InfographicSpec): CalloutCheck[] {
@@ -203,10 +298,11 @@ function dataLines(spec: InfographicSpec): string[] {
   const { chart } = spec;
   if (chart.form === "heatmap_matrix" && chart.matrix) {
     const { rows, columns, cells } = chart.matrix;
+    // Row and column names are quoted once in the header lists; here they are plain references.
     return rows.map(
       (row, r) =>
-        `Row "${row}": ${columns
-          .map((col, c) => `${col}=${cells[r]?.[c] ? `"${cells[r][c]}"` : "(empty)"}`)
+        `Row ${row}: ${columns
+          .map((col, c) => `${col} ${cells[r]?.[c] && cells[r][c] !== "n/a" ? `"${cells[r][c]}"` : cells[r]?.[c] === "n/a" ? "(no data, gray)" : "(empty)"}`)
           .join(", ")}`,
     );
   }
@@ -232,7 +328,84 @@ function slugify(text: string): string {
   return slug || "infographic";
 }
 
-export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): CompiledInfographic {
+/** Every printed string with its role, in reading order. */
+function buildContract(spec: InfographicSpec, callouts: CalloutCheck[], brandMark?: string): ContractItem[] {
+  const { chart } = spec;
+  const items: (ContractItem | undefined)[] = [
+    spec.kicker ? { text: spec.kicker, role: "kicker" } : undefined,
+    { text: spec.title, role: "title" },
+    { text: spec.subtitle, role: "subtitle" },
+    chart.unit ? { text: chart.unit, role: "unit" } : undefined,
+    ...(chart.matrix
+      ? [
+          { text: chart.matrix.rowHeader, role: "axis" as const },
+          { text: chart.matrix.columnHeader, role: "axis" as const },
+          ...chart.matrix.rows.map((text) => ({ text, role: "row" as const })),
+          ...chart.matrix.columns.map((text) => ({ text, role: "column" as const })),
+          ...chart.matrix.rows.flatMap((row, r) =>
+            chart.matrix!.columns.flatMap((col, c) => {
+              const cell = chart.matrix!.cells[r]?.[c];
+              return cell && cell !== "n/a" ? [{ text: cell, role: "cell" as const, ref: row, col }] : [];
+            }),
+          ),
+        ]
+      : chart.data.flatMap((point) => [
+          { text: point.label, role: "label" as const },
+          { text: point.value, role: "value" as const, ref: point.label },
+        ])),
+    ...(chart.legend?.map((item) => ({ text: item.label, role: "legend" as const })) ?? []),
+    chart.benchmark ? { text: chart.benchmark.label, role: "benchmark" as const } : undefined,
+    ...callouts.map((callout) => ({ text: callout.text, role: "callout" as const })),
+    { text: spec.source, role: "source" },
+    spec.footnote ? { text: spec.footnote, role: "footnote" } : undefined,
+    brandMark ? { text: brandMark, role: "brand" } : undefined,
+  ];
+  return items.filter((item): item is ContractItem => Boolean(item?.text.trim()));
+}
+
+/** Pairs of marks whose sizes differ clearly, for the reviewer's which-is-bigger questions. */
+function buildComparisons(spec: InfographicSpec): QaPlan["comparisons"] {
+  if (!MARK_NOUN[spec.chart.form]) return [];
+  const points = spec.chart.data
+    .filter((point) => typeof point.numeric === "number" && point.numeric > 0)
+    .sort((a, b) => (b.numeric ?? 0) - (a.numeric ?? 0));
+  const pairs: QaPlan["comparisons"] = [];
+  for (let i = 0; i + 1 < points.length && pairs.length < 10; i += 1) {
+    const big = points[i];
+    const small = points[i + 1];
+    const ratio = (big.numeric ?? 0) / (small.numeric ?? 1);
+    if (ratio < 1.15) continue;
+    // Alternate which one is asked first so a "first" bias cannot pass every question.
+    pairs.push(
+      pairs.length % 2 === 0
+        ? { first: big.label, second: small.label, larger: "first", ratio }
+        : { first: small.label, second: big.label, larger: "second", ratio },
+    );
+  }
+  return pairs;
+}
+
+/** The items a benchmark falls between, in display order. */
+function benchmarkPlacement(spec: InfographicSpec): QaPlan["benchmark"] {
+  const { benchmark, data, form } = spec.chart;
+  if (!benchmark) return undefined;
+  const layout = FORM_LAYOUT[form];
+  if (layout !== "rows" && layout !== "columns") {
+    throw new Error(
+      `A benchmark line needs a ranked_bar, column, table, pictogram or timeline chart, not ${form}. Put the reference value in a callout instead.`,
+    );
+  }
+  if (data.some((point) => typeof point.numeric !== "number")) {
+    throw new Error("A benchmark line needs the numeric value of every data point. Add `numeric` to each point.");
+  }
+  // Items beyond the benchmark come first in a ranked chart; the rule goes after the last of them.
+  const beyond = data.filter((point) => (point.numeric ?? 0) > benchmark.numeric);
+  const within = data.filter((point) => (point.numeric ?? 0) <= benchmark.numeric);
+  return { label: benchmark.label, above: beyond.at(-1)?.label, below: within[0]?.label };
+}
+
+export function compileInfographic(input: InfographicSpec, kit?: BrandKit): CompiledInfographic {
+  const spec = cleanSpec(input);
   const format = FORMATS[spec.format];
   const { chart } = spec;
   const brandMark = spec.brandMark ?? kit?.publicationName;
@@ -242,27 +415,22 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
       : spec.style.preset;
   const kitDirection = kit ? brandKitDirection(kit) : undefined;
   const callouts = checkedCallouts(spec);
+  const contract = buildContract(spec, callouts, brandMark);
+  const benchmark = benchmarkPlacement(spec);
+  const across = FORM_LAYOUT[chart.form] === "columns" ? "columns" : "rows";
 
-  const textContract = [
-    spec.kicker,
-    spec.title,
-    spec.subtitle,
-    chart.unit,
-    ...(chart.matrix
-      ? [
-          chart.matrix.rowHeader,
-          chart.matrix.columnHeader,
-          ...chart.matrix.rows,
-          ...chart.matrix.columns,
-          ...chart.matrix.cells.flat().filter((cell) => cell && cell !== "n/a"),
-        ]
-      : chart.data.flatMap((point) => [point.label, point.value])),
-    ...(chart.legend?.map((item) => item.label) ?? []),
-    ...callouts.map((callout) => callout.text),
-    spec.source,
-    spec.footnote,
-    brandMark,
-  ].filter((text): text is string => Boolean(text && text.trim()));
+  const words = contract.reduce((sum, item) => sum + item.text.split(/\s+/).filter(Boolean).length, 0);
+  const budget = WORD_BUDGET[spec.format];
+  if (words > budget) {
+    throw new Error(
+      `This spec prints ${words} words; the ${spec.format} canvas holds about ${budget} before labels start to break. Trim it: shorten the footnote, subtitle and callouts, drop a callout, or aggregate the smallest data points into "Other". Then call generate_infographic again.`,
+    );
+  }
+
+  const canvasHeight = Number(format.size.split("x")[1]);
+  const minLabel = Math.round(canvasHeight * 0.015);
+  const minFooter = Math.round(canvasHeight * 0.011);
+  const markNoun = chart.matrix ? "row or column" : "data mark";
 
   const sections = [
     `A premium, publication-quality editorial infographic in the tradition of Visual Capitalist and The Economist graphics desk. ${format.label.split(",")[0]} canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.`,
@@ -277,8 +445,8 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
     [
       "HEADER (top-left, left-aligned):",
       spec.kicker ? `- Kicker in small letter-spaced caps: "${spec.kicker}"` : "",
-      `- Headline, very large and bold, dominant on the page: "${spec.title}"${spec.accentWord ? ` with the word "${spec.accentWord}" in the accent color` : ""}`,
-      `- Subtitle in small regular weight: "${spec.subtitle}"`,
+      `- Headline, very large and bold, dominant on the page: "${spec.title}"${spec.accentWord ? `, with its word ${spec.accentWord} set in the accent color` : ""}`,
+      `- Subtitle in regular weight on at most two lines: "${spec.subtitle}"`,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -288,11 +456,14 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
       chart.layoutNotes ? `Arrangement notes (describe placement only, print none of these words): ${chart.layoutNotes}` : "",
       chart.unit ? `Unit note printed near the chart: "${chart.unit}"` : "",
       chart.matrix
-        ? `Row axis title "${chart.matrix.rowHeader}", column axis title "${chart.matrix.columnHeader}". Rows top to bottom: ${chart.matrix.rows.map((r) => `"${r}"`).join(", ")}. Columns left to right: ${chart.matrix.columns.map((c) => `"${c}"`).join(", ")}. Cell values:`
+        ? `Row axis title "${chart.matrix.rowHeader}", column axis title "${chart.matrix.columnHeader}". Rows top to bottom: ${chart.matrix.rows.map((r) => `"${r}"`).join(", ")}. Columns left to right: ${chart.matrix.columns.map((c) => `"${c}"`).join(", ")}. Cell values by row:`
         : "Data, in this exact order, each printed with its label and value label:",
       ...dataLines(spec),
       chart.legend?.length
         ? `Legend: ${chart.legend.map((item) => `"${item.label}" = ${item.color}`).join("; ")}`
+        : "",
+      benchmark
+        ? `Reference value: leave a clear gap between the ${benchmark.above ?? "first"} and ${benchmark.below ?? "last"} ${across} and print "${benchmark.label}" in small type at the ${across === "rows" ? "right end" : "top"} of that gap. Do not draw the reference line itself; it is added afterwards.`
         : "",
     ]
       .filter(Boolean)
@@ -300,11 +471,11 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
 
     callouts.length
       ? [
-          "CALLOUTS: small annotation boxes, text exactly as quoted. Each pointer, tail or leader line must end precisely on the element named, never on a neighboring row, bar or point:",
+          "CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout; connectors are added afterwards.",
           ...callouts.map((callout) =>
             callout.anchor
-              ? `- "${callout.text}": placed right beside "${callout.anchor}", its pointer ending exactly on the "${callout.anchor}" ${chart.matrix ? "row or column" : "data mark"}.`
-              : `- "${callout.text}": a free-standing note in open space with no pointer, tail or leader line; it refers to the chart as a whole.`,
+              ? `- "${callout.text}": placed close beside the ${callout.anchor} ${markNoun}, level with it.`
+              : `- "${callout.text}": a free-standing note; it refers to the chart as a whole.`,
           ),
         ].join("\n")
       : "",
@@ -324,25 +495,38 @@ export function compileInfographic(spec: InfographicSpec, kit?: BrandKit): Compi
       .filter(Boolean)
       .join("\n"),
 
-    "TEXT RULES: Render every quoted string above exactly as written, spelled correctly, fully legible, each exactly once. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.",
+    chart.form === "line" ? "" : "No numeric axis, scale or tick numbers: every value is printed as its own label.",
+    "Draw no average, target or threshold lines of your own.",
+
+    `TYPE SIZES: labels, value labels and callouts at least ${minLabel}px tall; source and footnote at least ${minFooter}px tall. Nothing smaller.`,
+
+    `TEXT RULES: Render every quoted string above exactly as written, spelled correctly and fully legible, each exactly once${chart.matrix ? " (cell values repeat only where the data repeats)" : ""}. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.`,
   ].filter(Boolean);
 
-  const dataSummary = chart.matrix
-    ? `Matrix ${chart.matrix.rowHeader} x ${chart.matrix.columnHeader}:\n${dataLines(spec).join("\n")}`
-    : chart.data
-        .map(
-          (point) =>
-            `${point.label}: ${point.value}${point.numeric !== undefined ? ` (${point.numeric})` : ""}`,
-        )
-        .join("\n");
-
+  const layout = FORM_LAYOUT[chart.form] ?? "free";
   return {
-    prompt: sections.filter(Boolean).join("\n\n"),
+    prompt: sections.join("\n\n"),
     size: format.size,
     referenceImages: kitDirection?.referenceImages ?? [],
     fileName: spec.fileName ?? slugify(spec.title),
-    textContract,
-    callouts,
-    dataSummary: `Chart form: ${chart.form}\n${dataSummary}${chart.legend?.length ? `\nLegend: ${chart.legend.map((item) => `${item.label}=${item.color}`).join(", ")}` : ""}`,
+    qa: {
+      contract,
+      layout: chart.matrix ? "matrix" : layout === "matrix" ? "free" : layout,
+      comparisons: buildComparisons(spec),
+      markNoun: MARK_NOUN[chart.form] ?? "mark",
+      labels: chart.matrix ? [...chart.matrix.rows, ...chart.matrix.columns] : chart.data.map((point) => point.label),
+      callouts,
+      axis: chart.form === "line",
+      benchmark,
+    },
+    meta: {
+      form: chart.form,
+      format: spec.format,
+      preset,
+      brandKitId: spec.brandKitId,
+      dataPoints: chart.matrix ? chart.matrix.rows.length * chart.matrix.columns.length : chart.data.length,
+      strings: contract.length,
+      words,
+    },
   };
 }
