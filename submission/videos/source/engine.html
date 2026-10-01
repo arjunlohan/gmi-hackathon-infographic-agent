@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=block" rel="stylesheet">
+<style>
+  :root { --paper: #f4f0e8; --ink: #1d1c1a; --ink2: #5f5b54; --gold: #b0862a; --red: #c2412d; --green: #2f7a4f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--W); height: var(--H); overflow: hidden; background: var(--paper); }
+  body { font-family: Inter, "Helvetica Neue", Arial, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(120% 90% at 50% 40%, #faf7f1 0%, #efe9de 100%); }
+  .layer { position: absolute; will-change: transform, opacity; }
+  .win { position: absolute; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(60,45,20,.22), 0 4px 14px rgba(60,45,20,.12); }
+  .win .bar { height: 38px; background: #f1ede6; display: flex; align-items: center; gap: 8px; padding-left: 16px; border-bottom: 1px solid rgba(0,0,0,.06); }
+  .win .bar i { width: 12px; height: 12px; border-radius: 50%; background: #d8d2c6; display: block; }
+  .win .bar span { margin-left: 18px; font-size: 14px; color: #8a857b; font-weight: 500; }
+  .win .view { position: absolute; left: 0; right: 0; top: 38px; bottom: 0; overflow: hidden; }
+  .win .view img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .kicker { font: 600 calc(var(--u) * 1.6) Inter; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); }
+  .title { font: 700 calc(var(--u) * 7.2) / .98 Oswald; text-transform: uppercase; letter-spacing: .005em; color: var(--ink); }
+  .title em { font-style: normal; color: var(--gold); }
+  .sub { font: 500 calc(var(--u) * 2.2) / 1.35 Inter; color: var(--ink2); }
+  .tag { position: absolute; font: 700 calc(var(--u) * 2.5) Inter; padding: .35em .7em; border-radius: 8px; color: #fff; white-space: nowrap; }
+  .box { position: absolute; border: 5px solid var(--red); border-radius: 10px; box-shadow: 0 0 0 9999px rgba(20,16,10,0); }
+  #cap { position: absolute; left: 50%; bottom: calc(var(--u) * 4); transform: translateX(-50%); width: max-content; max-width: 90%; text-align: center;
+         font: 700 var(--cap) / 1.25 Inter; color: #fff; background: rgba(24,22,19,.86); padding: .4em .85em; border-radius: 14px; text-wrap: balance; }
+  #brand { position: absolute; left: calc(var(--u) * 2.6); top: calc(var(--u) * 2.2); display: flex; align-items: center; gap: .55em;
+           font: 700 calc(var(--u) * 1.5) Oswald; letter-spacing: .18em; color: var(--ink); }
+  #brand b { width: 1.5em; height: 1.5em; border-radius: 50%; background: #f2d33c; display: grid; place-items: center; font-size: .85em; letter-spacing: 0; }
+  .card { position: absolute; background: #fff; border-radius: 14px; box-shadow: 0 18px 50px rgba(60,45,20,.18); overflow: hidden; }
+  .card img { width: 100%; height: 100%; display: block; }
+  .chip { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; display: flex; align-items: center; gap: .6em;
+          font: 700 calc(var(--u) * 2.6) Inter; color: var(--ink); background: #fff; padding: .55em 1.1em; border-radius: 999px;
+          box-shadow: 0 14px 40px rgba(60,45,20,.22); border: 2px solid rgba(176,134,42,.35); }
+  .chip i { width: .7em; height: .7em; border-radius: 50%; background: var(--gold); display: block; }
+  .chip.ok i { background: var(--green); }
+  .stat { font: 700 calc(var(--u) * 14) Oswald; color: var(--ink); line-height: 1; }
+  .statlabel { font: 600 calc(var(--u) * 2.4) Inter; color: var(--ink2); margin-top: calc(var(--u) * 1); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="brand"><b>P</b>PLATE</div>
+<div id="cap" style="opacity:0"></div>
+<script>
+// Timeline engine: window.TIMELINE = { w, h, scenes: [...], captions: [...] } is injected before load.
+// render(t) is pure: it sets every layer from the absolute time t, so frames can be captured in any order.
+const T = window.TIMELINE;
+document.documentElement.style.setProperty("--W", T.w + "px");
+document.documentElement.style.setProperty("--H", T.h + "px");
+document.documentElement.style.setProperty("--u", (Math.min(T.w, T.h) / 100) + "px");
+document.documentElement.style.setProperty("--cap", ((T.cap ?? 4.4) * Math.min(T.w, T.h) / 100) + "px");
+const U = Math.min(T.w, T.h) / 100;
+const stage = document.getElementById("stage");
+const cap = document.getElementById("cap");
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const easeOut = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const el = (tag, cls, parent = stage) => { const e = document.createElement(tag); if (cls) e.className = cls; parent.appendChild(e); return e; };
+// Fade a scene in and out at its edges.
+const edge = (s, t, fin = .3, fout = .25) => Math.min(s.start <= 0 ? 1 : easeOut((t - s.start) / fin), s.last ? 1 : easeOut((s.start + s.dur - t) / fout));
+const reveal = (s, t, delay, dur) => s.start <= 0 ? 1 : easeOut((t - s.start - delay) / dur);
+
+const builders = {
+  // Kinetic title card: kicker, title lines rising in with stagger, optional subtitle.
+  title(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:${8*U}px;right:${8*U}px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:${2.2*U}px;`;
+    const parts = [];
+    if (s.kicker) { const k = el("div", "kicker", root); k.textContent = s.kicker; parts.push(k); }
+    for (const line of s.lines) { const d = el("div", "title", root); d.innerHTML = line; if (s.size) d.style.fontSize = (s.size * U) + "px"; parts.push(d); }
+    if (s.sub) { const d = el("div", "sub", root); d.textContent = s.sub; d.style.maxWidth = (s.subWidth ?? 70) + "%"; parts.push(d); }
+    const side = (s.side ?? []).map((src, i) => { const c = el("div", "card"); const sz = s.sideSize ?? T.h * .5; c.style.width = c.style.height = sz + "px"; c.style.left = (T.w * (s.sideX ?? .52) + i * sz * .26) + "px"; c.style.top = (T.h * .5 - sz / 2 + (i % 2 ? sz * .08 : -sz * .06)) + "px"; el("img", "", c).src = src; return c; });
+    return (t) => {
+      root.style.opacity = edge(s, t);
+      side.forEach((c, i) => { const k = reveal(s, t, .3 + i * .22, .8), o = edge(s, t); c.style.opacity = Math.min(k, o); c.style.transform = `translate(${(1 - k) * 6 * U}px, ${Math.sin((t + i) * .6) * .5 * U}px) rotate(${(i - (side.length - 1) / 2) * 5}deg)`; });
+      parts.forEach((p, i) => { const k = reveal(s, t, .12 * i, .6); p.style.transform = `translateY(${(1 - k) * 4 * U}px)`; p.style.opacity = k; });
+    };
+  },
+  // Real app footage inside a browser window, with camera keyframes [{at, zoom, x, y}] (x, y = focus 0-1).
+  app(s) {
+    const win = el("div", "win"); const bar = el("div", "bar", win); for (let i = 0; i < 3; i++) el("i", "", bar);
+    el("span", "", bar).textContent = "Plate";
+    if (s.badge) { const b = el("div", "tag", win); b.textContent = s.badge; b.style.cssText += `right:14px;top:6px;background:var(--ink);font-size:${1.4*U}px;`; }
+    const view = el("div", "view", win); const wrap = el("div", "", view); wrap.style.cssText = "position:absolute;left:0;top:0;transform-origin:0 0;";
+    const img = el("img", "", wrap); img.style.transform = "none";
+    for (const m of s.masks ?? []) { const d = el("div", "", wrap); d.style.cssText = `position:absolute;left:${m[0]}px;top:${m[1]}px;width:${m[2]}px;height:${m[3]}px;background:${m[4]};`; d.dataset.until = m[5] ?? 1e9; }
+    const chip = s.chips ? el("div", "chip") : null; if (chip) { el("i", "", chip); chip.appendChild(document.createElement("span")); chip.style.top = (s.chipY ?? T.h * .12) + "px"; }
+    const W = s.box?.w ?? T.w * .84, H = s.box?.h ?? (W * (900 / 1440) + 38);
+    win.style.width = W + "px"; win.style.height = H + "px";
+    win.style.left = (s.box?.x ?? (T.w - W) / 2) + "px"; win.style.top = (s.box?.y ?? (T.h - H) / 2 + (s.box?.dy ?? 0)) + "px";
+    const vw = W, vh = H - 38;
+    const frames = window.CAPTURE.frames;
+    let current = "";
+    return (t) => {
+      win.style.opacity = edge(s, t);
+      const local = t - s.start;
+      // map scene time to capture time: segments [{from, to, speed}] in capture seconds
+      const ct = s.clip.from + Math.min(local * (s.clip.speed ?? 1), s.clip.to - s.clip.from);
+      let f = frames[0];
+      for (const fr of frames) { if (fr.t <= ct) f = fr; else break; }
+      if (f.path !== current) { img.src = f.path; current = f.path; }
+      // camera
+      const cams = s.camera ?? [{ at: 0, zoom: 1, x: .5, y: .5 }];
+      let a = cams[0], b = cams[0];
+      for (let i = 0; i < cams.length; i++) { if (cams[i].at <= local) { a = cams[i]; b = cams[i + 1] ?? cams[i]; } }
+      const k = b === a ? 0 : ease((local - a.at) / Math.max(.001, (b.at - a.at)));
+      const zoom = lerp(a.zoom, b.zoom, k), fx = lerp(a.x, b.x, k), fy = lerp(a.y, b.y, k);
+      const nw = img.naturalWidth || 1440, nh = img.naturalHeight || 900;
+      const sc = (vw / nw) * zoom;
+      const iw = nw * sc, ih = nh * sc;
+      const ox = clamp(fx * iw - vw / 2, 0, Math.max(0, iw - vw)), oy = clamp(fy * ih - vh / 2, 0, Math.max(0, ih - vh));
+      wrap.style.transform = `translate(${-ox}px, ${-oy}px) scale(${sc})`;
+      for (const d of wrap.querySelectorAll("div")) d.style.display = ct < Number(d.dataset.until) ? "block" : "none";
+      if (chip) {
+        const cur = [...s.chips].reverse().find((c) => ct >= c.t);
+        chip.style.opacity = cur ? edge(s, t) : 0;
+        if (cur) { chip.lastChild.textContent = cur.text; chip.className = "chip" + (cur.ok ? " ok" : ""); const since = ct - cur.t; const k = easeOut(since / ((s.clip.speed ?? 1) * .35)); chip.style.transform = `translateX(-50%) scale(${lerp(.92, 1, k)})`; }
+      }
+      const pop = easeOut((t - s.start) / .7);
+      win.style.transform = `translateY(${(1 - pop) * 3 * U}px) scale(${lerp(.97, 1, pop)})`;
+    };
+  },
+  // A single image with Ken Burns from rect `from` to `to` (fractions of the image), plus timed boxes.
+  image(s) {
+    const frame = el("div", "card"); const img = el("img", "", frame); img.src = s.src;
+    const size = s.size ?? Math.min(T.w, T.h) * .82;
+    frame.style.width = size + "px"; frame.style.height = size * (s.aspect ?? 1) + "px";
+    frame.style.left = (s.x ?? (T.w - size) / 2) + "px"; frame.style.top = (s.y ?? (T.h - size * (s.aspect ?? 1)) / 2) + "px";
+    img.style.transformOrigin = "0 0";
+    const boxes = (s.boxes ?? []).map((b) => { const d = el("div", "box", frame); d.style.borderColor = b.color ?? "var(--red)"; return [b, d]; });
+    const tags = (s.tags ?? []).map((g) => { const d = el("div", "tag", frame); d.textContent = g.text; d.style.background = g.color ?? "var(--red)"; return [g, d]; });
+    let panel = null;
+    if (s.panel) {
+      panel = el("div", "layer"); const px = (s.x ?? 0) + size + 5 * U;
+      panel.style.cssText += `left:${px}px;right:${5*U}px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:${2*U}px;`;
+      const k = el("div", "kicker", panel); k.textContent = s.panel.kicker; k.style.fontSize = 2.2 * U + "px"; if (s.panel.color) k.style.color = s.panel.color;
+      const tx = el("div", "", panel); tx.innerHTML = s.panel.text; tx.style.cssText = `font:700 ${(s.panel.size ?? 5.4)*U}px/1.08 Oswald;text-transform:uppercase;color:var(--ink);`;
+      if (s.panel.sub) { const sb = el("div", "sub", panel); sb.innerHTML = s.panel.sub; sb.style.fontSize = 3 * U + "px"; }
+    }
+    return (t) => {
+      frame.style.opacity = edge(s, t, .35, .3);
+      if (panel) { const k = reveal(s, t, .25, .6); panel.style.opacity = Math.min(k, edge(s, t)); panel.style.transform = `translateX(${(1 - k) * 4 * U}px)`; }
+      const local = t - s.start, k = ease(local / s.dur);
+      const from = s.from ?? [0, 0, 1], to = s.to ?? [0, 0, 1]; // [x, y, zoom]
+      const z = lerp(from[2], to[2], k), x = lerp(from[0], to[0], k), y = lerp(from[1], to[1], k);
+      img.style.transform = `scale(${z}) translate(${-x * 100}%, ${-y * 100}%)`;
+      const hh = size * (s.aspect ?? 1); const map = (bx) => [(bx[0] - x) * z * size, (bx[1] - y) * z * hh, (bx[2] - bx[0]) * z * size, (bx[3] - bx[1]) * z * hh];
+      for (const [b, d] of boxes) { const [l, tp, w, h] = map(b.rect); const kk = easeOut((local - b.at) / .4); Object.assign(d.style, { left: l + "px", top: tp + "px", width: w + "px", height: h + "px", opacity: local >= b.at ? kk : 0, transform: `scale(${lerp(1.15, 1, kk)})` }); }
+      for (const [g, d] of tags) { const [l, tp] = map(g.at2); const kk = easeOut((local - g.at) / .4); Object.assign(d.style, { left: l + "px", top: tp + "px", opacity: local >= g.at ? kk : 0, transform: `translateY(${(1 - kk) * 10}px)` }); }
+    };
+  },
+  // Before/after crops: left (red) then right (green) slides in, with captions above.
+  compare(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;`;
+    const head = el("div", "sub", root); head.style.cssText = `position:absolute;left:${6*U}px;right:${6*U}px;top:${(s.headTop ?? 8)*U}px;font:700 ${(s.headSize ?? 5.2)*U}px/1.05 Oswald;text-transform:uppercase;color:var(--ink);`; head.textContent = s.heading;
+    const cw = s.cropW ?? T.w * .42, gap = s.gap ?? T.w * .04;
+    const mk = (src, label, color, i) => {
+      const c = el("div", "card", root); c.style.width = cw + "px"; c.style.height = cw * s.aspect + "px";
+      const ch = cw * s.aspect, top = s.top ?? 22 * U;
+      if (s.stack) { c.style.left = (T.w - cw) / 2 + "px"; c.style.top = (top + i * (ch + 9 * U)) + "px"; }
+      else { c.style.left = ((T.w - 2 * cw - gap) / 2 + i * (cw + gap)) + "px"; c.style.top = top + "px"; }
+      c.style.outline = `6px solid ${color}`;
+      const im = el("img", "", c); im.src = src;
+      const rect = i === 0 ? s.boxBefore : s.boxAfter;
+      if (rect) { const b = el("div", "box", c); b.style.borderColor = color; b.style.left = rect[0] * cw + "px"; b.style.top = rect[1] * cw * s.aspect + "px"; b.style.width = (rect[2] - rect[0]) * cw + "px"; b.style.height = (rect[3] - rect[1]) * cw * s.aspect + "px"; c.box = b; }
+      const l = el("div", "tag", root); l.textContent = label; l.style.background = color;
+      l.style.left = c.style.left; l.style.top = (parseFloat(c.style.top) - 4.6 * U) + "px";
+      return [c, l];
+    };
+    const A = mk(s.before, s.beforeLabel ?? "First render", "var(--red)", 0);
+    const B = mk(s.after, s.afterLabel ?? "After one Hy edit", "var(--green)", 1);
+    return (t) => {
+      const local = t - s.start;
+      root.style.opacity = edge(s, t);
+      const ka = easeOut(local / .6), kb = easeOut((local - (s.afterAt ?? 2.2)) / .6);
+      const ka2 = s.start <= 0 ? 1 : ka;
+      const kb2 = s.start <= 0 && (s.afterAt ?? 2.2) <= 0 ? 1 : kb;
+      const push = lerp(1, 1.04, clamp(local / s.dur));
+      A[0].style.opacity = ka2; A[0].style.transform = `translateY(${(1 - ka2) * 4 * U}px) scale(${push})`; A[1].style.opacity = ka2;
+      B[0].style.opacity = kb2; B[0].style.transform = (s.stack ? `translateY(${(1 - kb2) * 3 * U}px)` : `translateX(${(1 - kb2) * 5 * U}px)`) + ` scale(${push})`; B[1].style.opacity = kb2;
+      head.style.opacity = s.start <= 0 ? 1 : easeOut(local / .4);
+      const bx = (c, at) => { if (!c.box) return; const k = s.start <= 0 && at <= 0 ? 1 : easeOut((local - at) / .35); c.box.style.opacity = local >= at ? k : 0; c.box.style.transform = `scale(${lerp(1.25, 1, k)})`; };
+      bx(A[0], s.boxAt ?? .9); bx(B[0], (s.afterAt ?? 2.2) + .5);
+    };
+  },
+  // Grid reveal of the set.
+  grid(s) {
+    const n = s.images.length, cols = s.cols ?? 2, rows = Math.ceil(n / cols);
+    const gap = s.gap ?? 2.2 * U;
+    const size = Math.min((T.w * (s.wFrac ?? .9) - gap * (cols - 1)) / cols, (T.h * (s.hFrac ?? .8) - gap * (rows - 1)) / rows);
+    const x0 = (T.w - cols * size - (cols - 1) * gap) / 2, y0 = (T.h - rows * size - (rows - 1) * gap) / 2 + (s.dy ?? 0);
+    const cards = s.images.map((src, i) => { const c = el("div", "card"); c.style.width = c.style.height = size + "px"; c.style.left = (x0 + (i % cols) * (size + gap)) + "px"; c.style.top = (y0 + Math.floor(i / cols) * (size + gap)) + "px"; el("img", "", c).src = src; return c; });
+    return (t) => {
+      const local = t - s.start, out = easeOut((s.start + s.dur - t) / .5);
+      const drift = lerp(1, 1.03, clamp(local / s.dur));
+      cards.forEach((c, i) => { const k = easeOut((local - i * (s.stagger ?? .35)) / .7); c.style.opacity = Math.min(k, s.last ? 1 : out); c.style.transform = `translateY(${(1 - k) * 5 * U}px) scale(${lerp(.92, 1, k) * drift})`; });
+    };
+  },
+  // Centered end card: wordmark, a few lines, the repo link.
+  endcard(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:${1.6*U}px;padding:0 ${6*U}px;`;
+    const parts = [];
+    const mark = el("div", "", root); mark.style.cssText = `display:flex;align-items:center;gap:${2*U}px;font:700 ${(s.size ?? 13)*U}px/1 Oswald;letter-spacing:.06em;`;
+    const dot = el("b", "", mark); dot.style.cssText = `width:${(s.size ?? 13)*U*.82}px;height:${(s.size ?? 13)*U*.82}px;border-radius:50%;background:#f2d33c;display:grid;place-items:center;font-size:.6em;`; dot.textContent = "P";
+    el("span", "", mark).textContent = s.title ?? "PLATE"; parts.push(mark);
+    for (const [i, line] of (s.lines ?? []).entries()) { const d = el("div", "sub", root); d.innerHTML = line; d.style.fontSize = ((i === 0 ? 3.6 : 2.9) * U) + "px"; d.style.color = i === 0 ? "var(--ink)" : "#3f3c37"; if (i === 0) d.style.fontWeight = 700; parts.push(d); }
+    if (s.url) { const d = el("div", "", root); d.textContent = s.url; d.style.cssText = `margin-top:${1.4*U}px;font:600 ${3.4*U}px Inter;color:#fff;background:var(--ink);padding:.5em 1em;border-radius:999px;`; parts.push(d); }
+    return (t) => {
+      root.style.opacity = edge(s, t);
+      parts.forEach((p, i) => { const k = reveal(s, t, .1 * i, .5); p.style.opacity = k; p.style.transform = `translateY(${(1 - k) * 2 * U}px)`; });
+    };
+  },
+  // Big numbers counting up with labels.
+  stats(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;display:flex;align-items:center;justify-content:center;gap:${10*U}px;`;
+    const items = s.items.map((it) => { const b = el("div", "", root); b.style.textAlign = "center"; const n = el("div", "stat", b); const l = el("div", "statlabel", b); l.textContent = it.label; return [it, n, b]; });
+    return (t) => {
+      root.style.opacity = edge(s, t);
+      items.forEach(([it, n, b], i) => { const k = easeOut((t - s.start - i * .35) / 1.1); n.textContent = (it.prefix ?? "") + Math.round(it.value * k).toLocaleString("en-US") + (it.suffix ?? ""); b.style.opacity = clamp((t - s.start - i * .35) / .3); });
+    };
+  },
+};
+
+const renders = T.scenes.map((s) => { const r = builders[s.type](s); return { s, r }; });
+const nodes = [...stage.children];
+window.render = (t) => {
+  for (const { s, r } of renders) r(t);
+  // hide scenes that are fully outside their window (keeps compositing cheap)
+  const quiet = T.scenes.some((s) => s.noCap && t >= s.start && t < s.start + s.dur);
+  const c = quiet ? null : T.captions.find((c) => t >= c.start && t < c.end);
+  if (c) { cap.textContent = c.text; cap.style.opacity = Math.min(easeOut((t - c.start) / .2), easeOut((c.end - t) / .2)); } else cap.style.opacity = 0;
+};
+window.ready = (async () => {
+  await document.fonts.ready;
+  await Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
+  return true;
+})();
+</script>
+</body>
+</html>

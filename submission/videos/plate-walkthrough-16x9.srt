@@ -1,0 +1,83 @@
+1
+00:00:00,250 --> 00:00:01,068
+Meet Plate.
+
+2
+00:00:01,068 --> 00:00:08,950
+Paste your data, and it designs an editorial infographic, rendered by Tencent's Hy Image 3.5 on GMI Cloud.
+
+3
+00:00:09,500 --> 00:00:13,693
+Pick where it will run and a style, then paste your data and the source.
+
+4
+00:00:13,693 --> 00:00:19,284
+Meta's Muse Spark 1.3 turns your brief into a design spec, with every word and number locked in.
+
+5
+00:00:19,834 --> 00:00:21,546
+Hy Image renders it at 2K.
+
+6
+00:00:21,546 --> 00:00:26,681
+Muse Spark reads it back, blind, and code checks every label against the spec.
+
+7
+00:00:27,231 --> 00:00:31,753
+On this run, Hy drew a pointer that tied a note about the whole chart to Zambia.
+
+8
+00:00:32,303 --> 00:00:35,656
+Plate flagged it, and one Hy edit erased just that line.
+
+9
+00:00:36,803 --> 00:00:43,692
+You get the graphic, checked 31 of 31, with takeaways, a caption, alt text and the data table.
+
+10
+00:00:44,242 --> 00:00:47,113
+Small print is where image models slip.
+
+11
+00:00:47,113 --> 00:00:52,266
+On a copper test render, Hy printed a world total of 23,000 as 28,000.
+
+12
+00:00:52,816 --> 00:00:54,682
+It misspelled Summaries.
+
+13
+00:00:56,316 --> 00:00:59,120
+And it added axis numbers nobody asked for.
+
+14
+00:00:59,120 --> 00:01:00,945
+One Hy edit fixed all three.
+
+15
+00:01:01,495 --> 00:01:06,278
+Copper: Chile mined more than the United States, China and Russia combined.
+
+16
+00:01:06,828 --> 00:01:10,392
+Coffee: Brazil grows more than the next four countries together.
+
+17
+00:01:11,028 --> 00:01:14,998
+Cotton: China grew more than Brazil and the United States combined.
+
+18
+00:01:15,548 --> 00:01:22,251
+Lithium: Australia, China and Chile mined nearly three-quarters of world output, not counting the U.S.
+
+19
+00:01:22,801 --> 00:01:26,652
+Every pixel and every letter, by Hy Image 3.5.
+
+20
+00:01:27,202 --> 00:01:27,581
+Plate.
+
+21
+00:01:27,581 --> 00:01:30,103
+The code and prompts are open on GitHub.

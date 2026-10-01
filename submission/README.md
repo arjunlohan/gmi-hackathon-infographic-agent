@@ -57,3 +57,15 @@ Every number was taken from the primary source and checked a second time against
 - Generation: Hy Image 3.5 preview (`hy-image-v3.5-preview`) on GMI Cloud, for every render and edit.
 - Spec writing and text checking: Meta Muse Spark 1.3 Contributor.
 - No other image or language model is used in Plate.
+
+## Videos
+
+Three cuts for X, each with burned-in captions and a matching `.srt` file. Every app shot is a real recording of Plate running locally; the run is shown sped up.
+
+| File | Format | Length | Angle |
+| --- | --- | --- | --- |
+| [plate-walkthrough-16x9.mp4](videos/plate-walkthrough-16x9.mp4) | 1920x1080 | 1:31 | How to use Plate, then what the check caught, then the set |
+| [material-facts-showcase-1x1.mp4](videos/material-facts-showcase-1x1.mp4) | 1080x1080 | 1:03 | The set first, then how it was made |
+| [plate-factcheck-story-16x9.mp4](videos/plate-factcheck-story-16x9.mp4) | 1920x1080 | 1:44 | Where Hy's small print slips, how Plate catches it, including the one it missed |
+
+The narration is macOS text-to-speech. The videos were rendered frame by frame from an HTML timeline in headless Chrome and encoded with ffmpeg; the scripts are in [videos/source/](videos/source/) (the screen captures and image assets they read are not committed).
