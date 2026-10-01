@@ -1,0 +1,37 @@
+A premium, publication-quality editorial data-journalism infographic: strict grid, refined typography, generous whitespace. 1:1 square canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.
+
+STYLE: Tactile concept piece: the data marks themselves are physically made from the real material the data measures, shot from directly above in soft daylight on a warm off-white paper background. The headline is set in crisp, heavy printed type with every letter cleanly formed; the material stays in the chart and hero. Divisions between shapes are thin warm-tan lines. Labels and values printed in bold condensed sans-serif in dark ink on the paper, beside the material rather than on it. Topic art direction: warm off-white paper background, heavy grotesque headline in near-black, each column built as a neat vertical pile of glossy roasted coffee beans, small bean cluster as hero accent
+
+HEADER (top-left, left-aligned):
+- Kicker in small letter-spaced caps: "2026/27 harvest forecast"
+- Headline, very large and bold, dominant on the page: "World's Coffee Giants", with its word Coffee set in the accent color
+- Subtitle in regular weight on at most two lines: "Production in million 60-kg bags, top growers, marketing year 2026/27"
+
+MAIN CHART: Vertical column chart. Category labels under each column, value label in bold just above each column, outside it. Column heights strictly proportional to the values on a shared zero baseline; a short column is never lengthened to fit its label.
+Data, in this exact order, each printed with its label and value label:
+1. "Brazil" with value label "71.9"
+2. "Vietnam" with value label "32.5"
+3. "Colombia" with value label "13.4"
+4. "Ethiopia" with value label "12.1"
+5. "Indonesia" with value label "11.4"
+6. "Uganda" with value label "7.2"
+7. "India" with value label "6.1"
+Scale check: the India column is about one tenth as long as the Brazil column, and every column in between is in exact proportion.
+
+CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout: each note sits directly beside what it describes.
+- "Brazil alone tops the next four combined, 71.9 vs 69.4.": placed close beside the Brazil data mark, level with it.
+- "Brazil and Vietnam together grow over half the world's coffee.": a free-standing note; it refers to the chart as a whole.
+
+HERO VISUAL: One small cluster of roasted coffee beans near the headline, the only material outside the columns. It must never cover labels, values or the headline.
+
+FOOTER (bottom, small type):
+- "Source: USDA Foreign Agricultural Service, Coffee: World Markets and Trade, July 2026"
+- "Forecast for marketing year 2026/27; rounded from USDA thousand-bag figures; years vary by country. World total 189.7."
+
+No numeric axis, scale or tick numbers: every value is printed as its own label.
+
+Draw no average, target or threshold lines of your own.
+
+TYPE SIZES: labels, value labels and callouts at least 33px tall; source and footnote at least 27px tall. Nothing smaller.
+
+TEXT RULES: Render every quoted string above exactly as written, spelled correctly and fully legible, each exactly once. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.

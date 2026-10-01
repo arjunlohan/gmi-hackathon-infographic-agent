@@ -1,0 +1,96 @@
+{
+ "1-copper": {
+  "draft": "v1",
+  "verdict": "publish",
+  "checks": "31/31",
+  "passes": [
+   {
+    "pass": 1,
+    "method": "render",
+    "verdict": "publish",
+    "caught": [],
+    "request": "source_image_1aa72912-1a37-4fac-9c19-37a86d12e6fae5df2ff4-a3dc-43ed-a1cd-57a204fd5f81.png"
+   }
+  ]
+ },
+ "2-coffee": {
+  "draft": "v1",
+  "verdict": "publish",
+  "checks": "30/30",
+  "passes": [
+   {
+    "pass": 1,
+    "method": "render",
+    "verdict": "publish",
+    "caught": [],
+    "request": "source_image_41c52465-3106-40aa-b0d0-9b6ac2dc13b0b4dfffea-a0d0-4451-8130-796a6856822b.png"
+   }
+  ]
+ },
+ "3-cotton": {
+  "draft": "v1",
+  "verdict": "publish",
+  "checks": "32/32",
+  "passes": [
+   {
+    "pass": 1,
+    "method": "render",
+    "verdict": "fix",
+    "caught": [
+     "callout"
+    ],
+    "request": "source_image_3752fdc5-a107-4959-b100-dd48c5044971a78efca2-15db-494f-9a12-99d5f2c40e28.png"
+   },
+   {
+    "pass": 2,
+    "method": "edit",
+    "verdict": "fix",
+    "caught": [
+     "callout"
+    ],
+    "request": "source_image_cd655e7c-42db-4605-a32c-7249ec1b1c01694f4414-7a5d-41cb-9824-d95905bc4e92.png"
+   },
+   {
+    "pass": 3,
+    "method": "edit",
+    "verdict": "fix",
+    "caught": [
+     "callout"
+    ],
+    "request": "source_image_b6c51904-9e78-477a-8d74-d695b2c7fd580db63c4a-5efa-470b-8dfb-3fb95991421f.png"
+   },
+   {
+    "pass": 4,
+    "method": "render",
+    "verdict": "publish",
+    "caught": [],
+    "request": "source_image_99960ed5-eaf4-4e6d-af35-0878dc0f98204f44d56f-b9d9-4232-a298-ea320aed7f7e.png"
+   }
+  ]
+ },
+ "4-lithium": {
+  "draft": "v2",
+  "verdict": "publish",
+  "checks": "29/29",
+  "passes": [
+   {
+    "pass": 1,
+    "method": "render",
+    "verdict": "fix",
+    "caught": [
+     "invented: The remaining 80,000 tons come from",
+     "invented: Zimbabwe, Argentina, Brazil, Mali and",
+     "invented: other countries"
+    ],
+    "request": "source_image_f9fbfa0b-fefa-40db-9237-277e9f55801dcf1482cb-418f-4629-973d-ec71250fe76a.png"
+   },
+   {
+    "pass": 2,
+    "method": "edit",
+    "verdict": "publish",
+    "caught": [],
+    "request": "source_image_54138e09-17d9-41ec-b658-8c152515b3be68242623-3400-4fc0-9192-88ba0bed2fe7.png"
+   }
+  ]
+ }
+}

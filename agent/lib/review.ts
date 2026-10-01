@@ -177,7 +177,7 @@ async function inspect(
               "referenceLines: every long line across the chart that marks an average, target, median or threshold value. Empty when there are none.",
               "unlabeledMarks: every data mark (bar, column, segment, tile, dot) with no label and no value of its own, such as an extra bar at the end of the chart. Empty when every mark is labeled.",
               "designIssues: legibility, overlapping or cut-off elements, clutter, weak hierarchy. Empty when there are none.",
-              "designGrade: how close this is to a Visual Capitalist or Economist graphic, ignoring spelling.",
+              "designGrade: how close this is to a top-tier editorial data graphic (clear hierarchy, strict grid, refined type, no clutter), ignoring spelling.",
             ]
               .filter(Boolean)
               .join("\n"),

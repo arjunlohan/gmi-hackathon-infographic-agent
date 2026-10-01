@@ -1,0 +1,39 @@
+A premium, publication-quality editorial data-journalism infographic: strict grid, refined typography, generous whitespace. 1:1 square canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.
+
+STYLE: Tactile concept piece: the data marks themselves are physically made from the real material the data measures, shot from directly above in soft daylight on a warm off-white paper background. The headline is set in crisp, heavy printed type with every letter cleanly formed; the material stays in the chart and hero. Divisions between shapes are thin warm-tan lines. Labels and values printed in bold condensed sans-serif in dark ink on the paper, beside the material rather than on it. Topic art direction: warm off-white paper, each column built as a neat vertical stack of brushed silver lithium metal ingots with soft highlights, heavy grotesque sans headline in near-black, material used only for columns and one small hero cluster
+
+HEADER (top-left, left-aligned):
+- Kicker in small letter-spaced caps: "Global output 2025"
+- Headline, very large and bold, dominant on the page: "Top Lithium Miners", with its word Lithium set in the accent color
+- Subtitle in regular weight on at most two lines: "Metric tons of lithium content mined by country, 2025 estimates"
+
+MAIN CHART: Vertical column chart. Category labels under each column, value label in bold just above each column, outside it. Column heights strictly proportional to the values on a shared zero baseline; a short column is never lengthened to fit its label.
+Data, in this exact order, each printed with its label and value label:
+1. "Australia" with value label "92,000"
+2. "China" with value label "62,000"
+3. "Chile" with value label "56,000"
+4. "Zimbabwe" with value label "28,000"
+5. "Argentina" with value label "23,000"
+6. "Brazil" with value label "12,000"
+7. "Mali" with value label "9,400"
+Scale check: the Mali column is about one tenth as long as the Australia column, and every column in between is in exact proportion.
+
+CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout: each note sits directly beside what it describes.
+- "Australia, China and Chile mined 210,000 of 290,000 tons, nearly three-quarters of output": a free-standing note; it refers to the chart as a whole.
+
+HERO VISUAL: small cluster of silver lithium metal ingots tucked beside the headline, same finish as the columns. It must never cover labels, values or the headline.
+
+FOOTER (bottom, small type):
+- "Source: U.S. Geological Survey, Mineral Commodity Summaries 2026 (lithium)"
+- "World total of 290,000 tons is rounded and excludes U.S. production, which is withheld."
+
+No numeric axis, scale or tick numbers: every value is printed as its own label.
+
+Draw no average, target or threshold lines of your own.
+
+TYPE SIZES: labels, value labels and callouts at least 33px tall; source and footnote at least 27px tall. Nothing smaller.
+
+TEXT RULES: Render every quoted string above exactly as written, spelled correctly and fully legible, each exactly once. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.
+
+KNOWN PROBLEMS ON THIS CHART FORM; avoid every one:
+- Extra text appears: print nothing that is not quoted, no invented labels, numbers or logos.

@@ -1,0 +1,41 @@
+A premium, publication-quality editorial data-journalism infographic: strict grid, refined typography, generous whitespace. 1:1 square canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.
+
+STYLE: Tactile concept piece: the data marks themselves are physically made from the real material the data measures, shot from directly above in soft daylight on a warm off-white paper background. The headline is set in crisp, heavy printed type with every letter cleanly formed; the material stays in the chart and hero. Divisions between shapes are thin warm-tan lines. Labels and values printed in bold condensed sans-serif in dark ink on the paper, beside the material rather than on it. Topic art direction: Each bar is a hammered copper ingot with dented metallic sheen on warm off-white paper; heavy grotesque sans headline in near-black; copper appears only as the bars plus one small ingot cluster near headline
+
+HEADER (top-left, left-aligned):
+- Kicker in small letter-spaced caps: "World's top producers"
+- Headline, very large and bold, dominant on the page: "Copper Miners Ranked", with its word Copper set in the accent color
+- Subtitle in regular weight on at most two lines: "Thousand metric tons of copper content by country, 2025 estimated"
+
+MAIN CHART: Horizontal bar chart ranked from largest at the top to smallest at the bottom. Each row: category label left-aligned beside the bar, value label in bold just past the end of the bar, outside it. Bar lengths strictly proportional to the values on a shared zero baseline; a short bar is never lengthened to fit its label.
+Data, in this exact order, each printed with its label and value label:
+1. "Chile" with value label "5,300"; emphasized in the accent color
+2. "DR Congo" with value label "3,200"
+3. "Peru" with value label "2,700"
+4. "China" with value label "1,800"
+5. "Russia" with value label "1,300"
+6. "United States" with value label "1,000"
+7. "Zambia" with value label "940"
+Scale check: the Zambia bar is about two tenths as long as the Chile bar, and every bar in between is in exact proportion.
+
+CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout: each note sits directly beside what it describes.
+- "Chile out-mined the U.S., China and Russia combined: 5,300 vs 4,100": placed close beside the Chile data mark, level with it.
+- "Top three mined almost half of the world's copper: 11,200 of 23,000": a free-standing note; it refers to the chart as a whole.
+
+HERO VISUAL: Small cluster of hammered copper ingots and raw nuggets tucked beside the headline at top. It must never cover labels, values or the headline.
+
+FOOTER (bottom, small type):
+- "U.S. Geological Survey, Mineral Commodity Summaries 2026 (copper)"
+- "2025 figures are estimates; world total rounded to 23,000. Values in thousand metric tons."
+
+No numeric axis, scale or tick numbers: every value is printed as its own label.
+
+Draw no average, target or threshold lines of your own.
+
+TYPE SIZES: labels, value labels and callouts at least 33px tall; source and footnote at least 27px tall. Nothing smaller.
+
+TEXT RULES: Render every quoted string above exactly as written, spelled correctly and fully legible, each exactly once. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.
+
+KNOWN PROBLEMS ON THIS CHART FORM; avoid every one:
+- Words and numbers get misspelled: copy every quoted string letter by letter and digit by digit.
+- Extra text appears: print nothing that is not quoted, no invented labels, numbers or logos.

@@ -139,7 +139,8 @@ export function brandKitDirection(kit: BrandKit): {
 } {
   const [accent, ...others] = kit.colors;
   const style = [
-    kit.styleSummary ? `House style of ${kit.publicationName ?? kit.name}: ${kit.styleSummary}` : "",
+    // The kit name stays out: Hy prints names it is given.
+    kit.styleSummary ? `House style: ${kit.styleSummary}` : "",
     kit.notes ? `Editor's notes: ${kit.notes}` : "",
     kit.colors.length
       ? `Brand palette, use only these plus neutral black, white and grays: primary accent ${accent}${others.length ? `, supporting ${others.join(", ")}` : ""}. The accent marks the most important data; the lightest brand color works as the background when the house style calls for a light page.`

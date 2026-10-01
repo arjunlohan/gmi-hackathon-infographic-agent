@@ -10,9 +10,10 @@ Built on [eve](https://eve.dev) (Vercel's agent framework) with **Meta Muse Spar
 input (chat · paste · URL · upload)
   → Muse Spark: find the story, pick chart form, format and style, write a structured spec
   → generate_infographic: spec compiled into a Hy Image prompt with a text contract → GMI Cloud
-  → vision review (Muse Spark, clean context): transcribe every label, diff against the contract
-  → edit_infographic (reference-guided Hy edit) or regenerate, at most 3 renders
+  → fact-check: Muse Spark transcribes the render blind; code diffs it against the contract
+  → reference-guided Hy edit of the best draft, or a corrected re-render, up to 6 passes
   → deliver: image + takeaways + caption + alt text
+  → every run, pass and rating is logged to Neon; per-chart-form failure rates feed the next prompt
 ```
 
 | Piece | File |
@@ -22,7 +23,9 @@ input (chat · paste · URL · upload)
 | Spec schema, style presets, prompt compiler | `agent/lib/infographic.ts` |
 | GMI Cloud request-queue client | `agent/lib/gmi.ts` |
 | Vision fact-check | `agent/lib/review.ts` |
-| Render, then review pipeline | `agent/lib/render.ts` |
+| Render, check and fix loop (durable eve workflow) | `agent/lib/render.ts`, `agent/lib/steps.ts` |
+| Deterministic text and layout checks | `agent/lib/qa.ts` |
+| QA log, drafts and learned policy (Neon Postgres) | `agent/lib/db.ts`, `agent/lib/policy.ts`, `agent/hooks/qa-capture.ts` |
 | Tools | `agent/tools/generate_infographic.ts`, `agent/tools/edit_infographic.ts` |
 | GMI MCP connection (catalog, pricing, history) | `agent/connections/gmi.ts` |
 | Brand kits (Blob store, style summaries, prompt direction) | `agent/lib/brand-kits.ts`, `app/api/brand-kits/*` |
@@ -52,12 +55,15 @@ The sidebar lists chats with AI-generated titles (Muse Spark, low effort), favor
 
 ```bash
 pnpm install          # pnpm 10 (npx pnpm@10 install if your global pnpm is older)
-vercel env pull .env.local   # VERCEL_OIDC_TOKEN (AI Gateway) and BLOB_READ_WRITE_TOKEN; re-run when the OIDC token expires (about 12h)
+vercel env pull .env.local   # VERCEL_OIDC_TOKEN (AI Gateway) and BLOB_READ_WRITE_TOKEN; the token expires after about 12h
 echo "GMI_API_KEY=..." >> .env.local
+echo "DATABASE_URL=..." >> .env.local   # Neon; optional, renders still work without it
 pnpm dev              # http://localhost:3000
 ```
 
 `eve invoke --url http://localhost:3000 "<prompt>"` runs a turn headless; `eve traces` shows the last run.
+
+A later `vercel env pull .env.local` overwrites the file with the Development environment, which drops keys you added by hand. To refresh only the token, pull into a separate file and copy the `VERCEL_OIDC_TOKEN` line across.
 
 ## Deploy
 
@@ -70,7 +76,9 @@ Production requires sign-in with Vercel (Better Auth), as scaffolded by eve.
 
 ## Hackathon entry (Type & Layout track)
 
-Workflow description for the submission: a two-model agent. Muse Spark 1.3 reads the source, picks the single story and the chart form, and writes a typed design spec (headline, data labels, callouts, visual metaphor, style preset). The spec compiles into a Hy Image 3.5 prompt with a strict text contract. After every render, a separate Muse Spark vision pass transcribes the image and diffs it against the contract; wrong or invented labels are fixed with Hy's reference-guided editing, or the graphic is regenerated.
+The entry is **Material Facts**, a set of four knowledge infographics made with Plate. Images, prompts, per-pass logs, sources and the workflow description are in [`submission/`](submission/README.md).
+
+Two models run the pipeline: Hy Image 3.5 preview renders and edits every image, and Muse Spark 1.3 writes the spec and checks the text. Code-drawn connector overlays exist (`PLATE_OVERLAYS=on`) but are off by default, so every mark on a graphic is Hy's own.
 
 ## Known limits
 

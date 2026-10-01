@@ -32,7 +32,7 @@ async function learnedPolicy(form: string | undefined): Promise<RenderPolicy> {
 
 function withWarnings(prompt: string, policy: RenderPolicy): string {
   if (policy.warnings.length === 0) return prompt;
-  return `${prompt}\n\nKNOWN PROBLEMS ON THIS CHART FORM (learned from ${policy.basis}); avoid every one:\n${policy.warnings.map((line) => `- ${line}`).join("\n")}`;
+  return `${prompt}\n\nKNOWN PROBLEMS ON THIS CHART FORM; avoid every one:\n${policy.warnings.map((line) => `- ${line}`).join("\n")}`;
 }
 
 export async function prepareStep(
@@ -99,7 +99,11 @@ export async function preferStep(a: string, b: string): Promise<"a" | "b" | unde
   return preferPolished(a, b, AbortSignal.timeout(40_000)).catch(() => undefined);
 }
 
-/** Draw callout connectors and the benchmark rule onto the chosen render, when it needs any. */
+/**
+ * Draw callout connectors and the benchmark rule onto the chosen render, when it needs any. Off
+ * unless PLATE_OVERLAYS=on: in an audit of stored renders the code-drawn lines crossed text more
+ * often than they helped, and a graphic is cleanest when every mark on it is Hy's own.
+ */
 export async function composeStep(input: {
   imageUrl: string;
   review: Review;
@@ -107,6 +111,7 @@ export async function composeStep(input: {
   name: string;
 }): Promise<{ url: string; width: number; height: number } | { error: string } | undefined> {
   "use step";
+  if (process.env.PLATE_OVERLAYS !== "on") return undefined;
   const overlay = planOverlay(input.review, input.plan);
   if (overlay.lines.length === 0) return undefined;
   try {

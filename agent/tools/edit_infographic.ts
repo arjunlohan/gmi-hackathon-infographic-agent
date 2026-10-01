@@ -11,7 +11,7 @@ export default defineWorkflowTool({
     instruction: z
       .string()
       .describe(
-        "Precise visual change, quoting exact strings where relevant, e.g. 'Make the Russia bar deep green. Keep every other element identical.'",
+        "Precise visual change, quoting exact strings where relevant, e.g. 'Make the highlighted bar deep green. Keep every other element identical.'",
       ),
   }),
   label: {
@@ -35,7 +35,7 @@ export default defineWorkflowTool({
       meta: parent.meta,
       referenceImages: parent.referenceImages ?? [],
       fileName: parent.fileName ?? "infographic",
-      // Revise the render itself; connectors are redrawn for the result.
+      // Revise the render itself, without any code-drawn overlay.
       startFrom: { imageUrl: parent.baseImageUrl ?? parent.imageUrl, instruction, parentId: parent.id },
       sessionId: ctx.session.id,
       qaId: `${ctx.session.id}:${ctx.callId}`,

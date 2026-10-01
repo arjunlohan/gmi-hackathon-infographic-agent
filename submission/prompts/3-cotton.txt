@@ -1,0 +1,41 @@
+A premium, publication-quality editorial data-journalism infographic: strict grid, refined typography, generous whitespace. 1:1 square canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.
+
+STYLE: Tactile concept piece: the data marks themselves are physically made from the real material the data measures, shot from directly above in soft daylight on a warm off-white paper background. The headline is set in crisp, heavy printed type with every letter cleanly formed; the material stays in the chart and hero. Divisions between shapes are thin warm-tan lines. Labels and values printed in bold condensed sans-serif in dark ink on the paper, beside the material rather than on it. Topic art direction: warm off-white paper texture, heavy grotesque sans-serif headline in near-black. Every bar is the same roll of white raw cotton lint with soft warm shadow so it reads on the paper; cotton material appears nowhere else except the small hero cluster.
+
+HEADER (top-left, left-aligned):
+- Kicker in small letter-spaced caps: "2025/26 harvest ranking"
+- Headline, very large and bold, dominant on the page: "Top Cotton Growers", with its word Cotton set in the accent color
+- Subtitle in regular weight on at most two lines: "Production in thousand 480-lb bales by country, marketing year 2025/26 preliminary"
+
+MAIN CHART: Horizontal bar chart ranked from largest at the top to smallest at the bottom. Each row: category label left-aligned beside the bar, value label in bold just past the end of the bar, outside it. Bar lengths strictly proportional to the values on a shared zero baseline; a short bar is never lengthened to fit its label.
+Data, in this exact order, each printed with its label and value label:
+1. "China" with value label "35,800"
+2. "India" with value label "23,800"
+3. "Brazil" with value label "18,750"
+4. "United States" with value label "13,897"
+5. "Pakistan" with value label "5,300"
+6. "Australia" with value label "4,500"
+7. "Uzbekistan" with value label "3,445"
+Scale check: the Uzbekistan bar is about one tenth as long as the China bar, and every bar in between is in exact proportion.
+
+CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout: each note sits directly beside what it describes.
+- "China topped Brazil and the United States combined: 35,800 vs 32,647": placed close beside the China data mark, level with it.
+- "Top four grew over three-quarters of world cotton: 92,247 of 121,945": placed close beside the United States data mark, level with it.
+
+HERO VISUAL: one small cluster of fluffy white raw cotton lint near the headline. It must never cover labels, values or the headline.
+
+FOOTER (bottom, small type):
+- "Source: USDA Foreign Agricultural Service, Cotton: World Markets and Trade, September 2026"
+- "World total 121,945. Marketing year 2025/26 preliminary as reported by USDA."
+
+No numeric axis, scale or tick numbers: every value is printed as its own label.
+
+Draw no average, target or threshold lines of your own.
+
+TYPE SIZES: labels, value labels and callouts at least 33px tall; source and footnote at least 27px tall. Nothing smaller.
+
+TEXT RULES: Render every quoted string above exactly as written, spelled correctly and fully legible, each exactly once. Do not add any other words, numbers, percentages, dates, labels or logos that are not quoted above. No lorem ipsum, no pseudo-text, no watermark. Crisp vector-sharp typography, strong contrast, aligned grid, consistent spacing, all content inside a 5% safe margin.
+
+KNOWN PROBLEMS ON THIS CHART FORM; avoid every one:
+- Extra text appears: print nothing that is not quoted, no invented labels, numbers or logos.
+- Words and numbers get misspelled: copy every quoted string letter by letter and digit by digit.

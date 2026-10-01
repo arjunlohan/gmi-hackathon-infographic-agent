@@ -22,11 +22,11 @@ export const STYLE_PRESETS = {
   cinematic_hero:
     "Dark cinematic magazine poster. Deep navy-to-black background with a soft spotlight vignette and subtle film grain. One large, dramatically lit photorealistic 3D hero object anchors one side and slightly overlaps the chart area without covering any label. Headline set huge in tall condensed sans-serif (Bebas Neue / Oswald feel), stacked over two or three lines, with the accent word in electric yellow and the rest in white. Data marks in saturated sky blue with bold white value labels; the single most important data point highlighted in electric yellow.",
   chalkboard:
-    "Classroom chalkboard atmosphere: dark slate background with faint hand-drawn chalk formulas, doodles and eraser smudges at low opacity. Kicker in widely letter-spaced uppercase sans, headline in a large high-contrast Didone serif (Didot / Playfair feel) in chalk white. Data marks are solid, saturated category colors with thin white separators and clean white sans labels. A photographic subject may be composited in the foreground.",
+    "Classroom chalkboard atmosphere: dark slate background with faint chalk doodles and eraser smudges at low opacity, with no legible writing. Kicker in widely letter-spaced uppercase sans, headline in a large high-contrast Didone serif (Didot / Playfair feel) in chalk white. Data marks are solid, saturated category colors with thin white separators and clean white sans labels. A photographic subject may be composited in the foreground.",
   illustrated_map:
-    "Rich illustrated editorial style on a deep muted teal background with fine paper grain and soft vignette. Headline pairs a letter-spaced uppercase kicker with one big flowing brush-script word in white. Diverging palette from muted sea-green (low) through slate to deep crimson (high). Regions and shapes have subtle inner shadows and dark outlines. One symbolic 3D prop related to the topic (with a price tag or label if relevant) sits near the headline.",
+    "Rich illustrated editorial style on a deep muted teal background with fine paper grain and soft vignette. Headline pairs a letter-spaced uppercase kicker with one big flowing brush-script word in white. Diverging palette from muted sea-green (low) through slate to deep crimson (high). Regions and shapes have subtle inner shadows and dark outlines. One symbolic 3D prop related to the topic, with no text on it, sits near the headline.",
   material_texture:
-    "Tactile concept piece: the data graphic itself is physically made from a real material tied to the topic (for example soil, coins, grain, stone, fabric), shot from directly above in soft daylight on a warm off-white paper background. The headline letters are sculpted or embossed out of the same material. Divisions between shapes are thin warm-tan lines. Labels printed in bold condensed off-white sans-serif with a faint drop shadow for legibility.",
+    "Tactile concept piece: the data marks themselves are physically made from the real material the data measures, shot from directly above in soft daylight on a warm off-white paper background. The headline is set in crisp, heavy printed type with every letter cleanly formed; the material stays in the chart and hero. Divisions between shapes are thin warm-tan lines. Labels and values printed in bold condensed sans-serif in dark ink on the paper, beside the material rather than on it.",
   clean_light:
     "Calm newsletter-ready editorial layout on a warm off-white background (#f6f3ee). Kicker in small letter-spaced caps in the accent color, headline in a bold modern serif in near-black. One accent color (deep vermilion #d9432b) highlights the key data; every other mark in graphite and soft warm grays. Fine hairline gridlines, generous whitespace, simple flat vector icons, no clutter.",
   neon_tech:
@@ -35,9 +35,9 @@ export const STYLE_PRESETS = {
 
 const FORM_LAYOUTS = {
   ranked_bar:
-    "Horizontal bar chart ranked from largest at the top to smallest at the bottom. Each row: category label left-aligned beside the bar, value label in bold at the end of the bar. Bar lengths strictly proportional to the values on a shared zero baseline.",
+    "Horizontal bar chart ranked from largest at the top to smallest at the bottom. Each row: category label left-aligned beside the bar, value label in bold just past the end of the bar, outside it. Bar lengths strictly proportional to the values on a shared zero baseline; a short bar is never lengthened to fit its label.",
   column:
-    "Vertical column chart. Category labels under each column, value label in bold above each column. Column heights strictly proportional to the values on a shared zero baseline.",
+    "Vertical column chart. Category labels under each column, value label in bold just above each column, outside it. Column heights strictly proportional to the values on a shared zero baseline; a short column is never lengthened to fit its label.",
   heatmap_matrix:
     "Matrix / heatmap table. Row headers on the left, column headers across the top rotated about 45 degrees. Each cell is a square filled with the color of its value band from the legend, with the value printed centered inside. Empty cells left blank. Legend row of colored band chips above the matrix.",
   choropleth_map:
@@ -73,12 +73,12 @@ type FormatKey = keyof typeof FORMATS;
 const FORMAT_KEYS = Object.keys(FORMATS) as [FormatKey, ...FormatKey[]];
 
 const dataPoint = z.object({
-  label: z.string().max(40).describe("Category or row name exactly as it should be printed, e.g. 'Russia'"),
+  label: z.string().max(40).describe("Category or row name exactly as it should be printed"),
   value: z
     .string()
     .max(16)
-    .describe("Value exactly as it should be printed, with unit/format, e.g. '23.2M', '$864M', '612'"),
-  numeric: z.number().optional().describe("Raw number used for proportions, e.g. 23.2"),
+    .describe("Value exactly as it should be printed, in the same format and precision as the other values"),
+  numeric: z.number().optional().describe("Raw number used for proportions, in the same unit for every point"),
   group: z.string().optional().describe("Group / region / color category, if any"),
   highlight: z.boolean().optional().describe("True for the one or two points the story is about"),
 });
@@ -89,24 +89,24 @@ export const infographicSpecSchema = z.object({
       .map(([key, value]) => `${key}: ${value.label}`)
       .join("; "),
   ),
-  kicker: z.string().max(40).optional().describe("Small line above the headline, e.g. 'THE WORLD'S TOP' or 'RANKED:'"),
-  title: z.string().max(48).describe("Headline, 2-6 punchy words, e.g. 'Fertilizer Exporters'"),
+  kicker: z.string().max(40).optional().describe("Small line above the headline that frames it"),
+  title: z.string().max(48).describe("Headline, 2-6 punchy words naming the subject"),
   accentWord: z.string().optional().describe("One word from the title to set in the accent color"),
   subtitle: z
     .string()
     .max(130)
-    .describe("Measure, unit, geography and year, e.g. 'Average PISA math score of 15-year-olds, 2025'"),
+    .describe("Measure, unit, geography and year"),
   chart: z.object({
     form: z.enum(FORM_KEYS),
-    unit: z.string().max(40).optional().describe("Unit note if not in subtitle, e.g. 'in USD billions'"),
+    unit: z.string().max(40).optional().describe("Unit note if not in subtitle"),
     data: z
       .array(dataPoint)
       .max(40)
       .describe("Every data point to print, in display order. Keep to <=25 for legibility; aggregate the tail into 'Other'."),
     matrix: z
       .object({
-        rowHeader: z.string().describe("What rows mean, e.g. 'Exporter'"),
-        columnHeader: z.string().describe("What columns mean, e.g. 'Importer'"),
+        rowHeader: z.string().describe("What rows mean"),
+        columnHeader: z.string().describe("What columns mean"),
         rows: z.array(z.string()),
         columns: z.array(z.string()),
         cells: z
@@ -120,12 +120,12 @@ export const infographicSpecSchema = z.object({
       .optional(),
     benchmark: z
       .object({
-        label: z.string().max(40).describe("Printed label, e.g. 'OECD average: 463'"),
-        numeric: z.number().describe("The reference value on the same scale as the data, e.g. 463"),
+        label: z.string().max(40).describe("Printed label: the reference's name and value"),
+        numeric: z.number().describe("The reference value on the same scale as the data"),
       })
       .optional()
       .describe(
-        "A reference value such as an average or target (ranked_bar, column, table, pictogram, timeline only). It is drawn exactly as a dashed rule between the items above and below it. Never describe reference or average lines in layoutNotes.",
+        "A reference value such as an average or target (ranked_bar, column, table, pictogram, timeline only). The graphic leaves a gap between the items above and below it and prints the label there. Never describe reference or average lines in layoutNotes.",
       ),
     layoutNotes: z
       .string()
@@ -138,12 +138,12 @@ export const infographicSpecSchema = z.object({
         text: z
           .string()
           .max(110)
-          .describe("The annotation as printed, a true statement from the source, e.g. 'Vietnam grows mostly robusta'"),
+          .describe("The annotation as printed, a true statement from the source"),
         anchor: z
           .string()
           .optional()
           .describe(
-            "The exact data label (or matrix row/column) this note is about; its pointer ends on that element. Omit for a statement about the whole chart, which then gets no pointer.",
+            "The exact data label (or matrix row/column) this note is about; the note is placed right beside that element, with no pointer. Omit for a statement about the whole chart.",
           ),
       }),
     )
@@ -153,7 +153,7 @@ export const infographicSpecSchema = z.object({
   hero: z
     .string()
     .optional()
-    .describe("Hero illustration / visual metaphor and where it sits, e.g. 'pile of dark soil with green sprouts, lower right'. No real people's likenesses."),
+    .describe("Hero illustration / visual metaphor specific to this topic, and where it sits. No real people's likenesses."),
   style: z.object({
     preset: z.enum(PRESET_KEYS),
     artDirection: z
@@ -161,7 +161,7 @@ export const infographicSpecSchema = z.object({
       .optional()
       .describe("Topic-specific art direction layered on the preset: palette tweaks, material, texture, props, composition"),
   }),
-  source: z.string().max(150).describe("Source line, e.g. 'Source: FAO (2024)'"),
+  source: z.string().max(150).describe("Source line naming the publisher, report and year"),
   footnote: z.string().max(220).optional().describe("Short methodology note, one sentence"),
   brandKitId: z
     .string()
@@ -171,7 +171,7 @@ export const infographicSpecSchema = z.object({
     .string()
     .regex(/^[a-z0-9]+(-[a-z0-9]+){0,2}$/)
     .optional()
-    .describe("Download file name: 1-3 lowercase words in kebab-case describing the graphic, e.g. 'fertilizer-exporters', 'ceo-pay'"),
+    .describe("Download file name: 1-3 lowercase words in kebab-case describing the graphic, e.g. 'topic-measure'"),
   brandMark: z
     .string()
     .max(40)
@@ -308,7 +308,7 @@ function dataLines(spec: InfographicSpec): string[] {
   }
   return chart.data.map((point, index) => {
     const extras = [
-      point.group ? `belongs to group "${point.group}"` : "",
+      point.group ? (chart.form === "treemap" ? `belongs to group "${point.group}"` : `colored by its group, ${point.group} (not printed)`) : "",
       point.highlight ? "emphasized in the accent color" : "",
     ]
       .filter(Boolean)
@@ -354,6 +354,9 @@ function buildContract(spec: InfographicSpec, callouts: CalloutCheck[], brandMar
           { text: point.value, role: "value" as const, ref: point.label },
         ])),
     ...(chart.legend?.map((item) => ({ text: item.label, role: "legend" as const })) ?? []),
+    ...(chart.form === "treemap" && !chart.matrix
+      ? [...new Set(chart.data.flatMap((point) => (point.group ? [point.group] : [])))].map((text) => ({ text, role: "legend" as const }))
+      : []),
     chart.benchmark ? { text: chart.benchmark.label, role: "benchmark" as const } : undefined,
     ...callouts.map((callout) => ({ text: callout.text, role: "callout" as const })),
     { text: spec.source, role: "source" },
@@ -383,6 +386,26 @@ function buildComparisons(spec: InfographicSpec): QaPlan["comparisons"] {
     );
   }
   return pairs;
+}
+
+const TENTHS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+/**
+ * The scale of a bar or column chart in words: the image model stretches short bars to fit their
+ * labels unless told how short they are. Words, not digits, so no new number gets printed.
+ */
+function proportionNote(spec: InfographicSpec): string {
+  const { form, data } = spec.chart;
+  if (form !== "ranked_bar" && form !== "column") return "";
+  if (data.length < 2 || data.some((point) => typeof point.numeric !== "number" || point.numeric <= 0)) return "";
+  const longest = data.reduce((a, b) => ((b.numeric ?? 0) > (a.numeric ?? 0) ? b : a));
+  const shortest = data.reduce((a, b) => ((b.numeric ?? 0) < (a.numeric ?? 0) ? b : a));
+  const ratio = (shortest.numeric ?? 0) / (longest.numeric ?? 1);
+  if (ratio > 0.85) return "";
+  const tenths = Math.round(ratio * 10);
+  const share = tenths === 0 ? "less than one tenth" : tenths === 1 ? "about one tenth" : `about ${TENTHS[tenths]} tenths`;
+  const mark = form === "column" ? "column" : "bar";
+  return `Scale check: the ${shortest.label} ${mark} is ${share} as long as the ${longest.label} ${mark}, and every ${mark} in between is in exact proportion.`;
 }
 
 /** The items a benchmark falls between, in display order. */
@@ -428,12 +451,12 @@ export function compileInfographic(input: InfographicSpec, kit?: BrandKit): Comp
   }
 
   const canvasHeight = Number(format.size.split("x")[1]);
-  const minLabel = Math.round(canvasHeight * 0.015);
-  const minFooter = Math.round(canvasHeight * 0.011);
+  const minLabel = Math.round(canvasHeight * 0.016);
+  const minFooter = Math.round(canvasHeight * 0.013);
   const markNoun = chart.matrix ? "row or column" : "data mark";
 
   const sections = [
-    `A premium, publication-quality editorial infographic in the tradition of Visual Capitalist and The Economist graphics desk. ${format.label.split(",")[0]} canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.`,
+    `A premium, publication-quality editorial data-journalism infographic: strict grid, refined typography, generous whitespace. ${format.label.split(",")[0]} canvas. Clear visual hierarchy: headline first, then the chart, then annotations, then the footer.`,
 
     // A brand kit is the style: it replaces the preset unless the kit names a preset to build on.
     `STYLE: ${
@@ -459,11 +482,12 @@ export function compileInfographic(input: InfographicSpec, kit?: BrandKit): Comp
         ? `Row axis title "${chart.matrix.rowHeader}", column axis title "${chart.matrix.columnHeader}". Rows top to bottom: ${chart.matrix.rows.map((r) => `"${r}"`).join(", ")}. Columns left to right: ${chart.matrix.columns.map((c) => `"${c}"`).join(", ")}. Cell values by row:`
         : "Data, in this exact order, each printed with its label and value label:",
       ...dataLines(spec),
+      proportionNote(spec),
       chart.legend?.length
         ? `Legend: ${chart.legend.map((item) => `"${item.label}" = ${item.color}`).join("; ")}`
         : "",
       benchmark
-        ? `Reference value: leave a clear gap between the ${benchmark.above ?? "first"} and ${benchmark.below ?? "last"} ${across} and print "${benchmark.label}" in small type at the ${across === "rows" ? "right end" : "top"} of that gap. Do not draw the reference line itself; it is added afterwards.`
+        ? `Reference value: leave a clear gap between the ${benchmark.above ?? "first"} and ${benchmark.below ?? "last"} ${across} and print "${benchmark.label}" in small type at the ${across === "rows" ? "right end" : "top"} of that gap. Draw no line for it.`
         : "",
     ]
       .filter(Boolean)
@@ -471,7 +495,7 @@ export function compileInfographic(input: InfographicSpec, kit?: BrandKit): Comp
 
     callouts.length
       ? [
-          "CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout; connectors are added afterwards.",
+          "CALLOUTS: small annotation boxes, text exactly as quoted, in open space that covers no bar, label or value. Draw no pointer, arrow, tail or leader line on any callout: each note sits directly beside what it describes.",
           ...callouts.map((callout) =>
             callout.anchor
               ? `- "${callout.text}": placed close beside the ${callout.anchor} ${markNoun}, level with it.`
@@ -480,7 +504,7 @@ export function compileInfographic(input: InfographicSpec, kit?: BrandKit): Comp
         ].join("\n")
       : "",
 
-    spec.hero ? `HERO VISUAL: ${spec.hero}. It must never cover labels, values or the headline.` : "",
+    spec.hero ? `HERO VISUAL: ${spec.hero.replace(/[.\s]+$/, "")}. It must never cover labels, values or the headline.` : "",
 
     [
       "FOOTER (bottom, small type):",

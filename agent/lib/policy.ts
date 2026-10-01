@@ -21,11 +21,11 @@ const EDIT_GIVE_UP_RATE = 0.25;
 const WARNING: Record<string, string> = {
   misspelled: "Words and numbers get misspelled: copy every quoted string letter by letter and digit by digit.",
   missing: "Quoted strings get dropped: every quoted string must appear, including small footer text.",
-  invented: "Extra text appears: print nothing that is not quoted, no axis numbers, no invented labels or logos.",
+  invented: "Extra text appears: print nothing that is not quoted, no invented labels, numbers or logos.",
   malformed: "Letters come out broken: keep all type crisp, fully formed and large enough to read.",
   misplaced: "Values land on the wrong row: each value sits on the same row as its own label.",
   order: "Rows come out of order: keep the items in exactly the order listed.",
-  magnitude: "Bar sizes drift from the data: lengths must be strictly proportional on a zero baseline.",
+  magnitude: "Mark sizes drift from the data: every bar, column, tile or segment strictly proportional to its value.",
   callout: "Callout pointers land on the wrong item: draw callouts with no pointer, arrow or leader line at all.",
   encoding: "Stray average or threshold lines appear: draw no reference lines of any kind.",
 };
@@ -37,7 +37,8 @@ export function policyFrom(record: FormTrackRecord): RenderPolicy {
   const warnings = Object.entries(record.firstPassKinds)
     .filter(([kind, rate]) => rate >= WARN_RATE && WARNING[kind])
     .sort((a, b) => b[1] - a[1])
-    .map(([kind, rate]) => `${WARNING[kind]} (seen in ${Math.round(rate * 100)}% of first renders)`);
+    // Rates stay out of the prompt: numbers in the render prompt can end up printed on the graphic.
+    .map(([kind]) => WARNING[kind]);
   const noEdit = Object.entries(record.fixes)
     .filter(([key, stat]) => key.startsWith("edit:") && stat.attempts >= MIN_EDIT_ATTEMPTS && stat.fixed / stat.attempts < EDIT_GIVE_UP_RATE)
     .map(([key]) => key.slice("edit:".length));

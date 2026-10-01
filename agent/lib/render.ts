@@ -6,7 +6,7 @@ import type { Draft } from "./drafts";
 import type { GeneratedImage, HySize } from "./gmi";
 import type { RenderMeta } from "./infographic";
 import type { RenderPolicy } from "./policy";
-import { type Box, type QaPlan, rankOf } from "./qa";
+import { type Box, type Defect, type QaPlan, rankOf } from "./qa";
 import type { Review } from "./review";
 import { composeStep, preferStep, renderStep, reviewStep, saveDraftStep } from "./steps";
 
@@ -100,6 +100,20 @@ const KEEP =
   "KEEP UNCHANGED: every other element exactly as it is: layout, canvas size, colors, typography, illustration, and all other text, spelled exactly as now.";
 
 /**
+ * A correction for a fresh render. Hy prints quoted text, so a correction quotes only strings that
+ * belong on the graphic: never the misspelling or the stray text it replaces.
+ */
+function correction(defect: Defect, contract: QaPlan["contract"]): string {
+  // `expected` is spec text for a misspelling but the transcribed text for a malformed word.
+  const spec = contract.find((item) => item.text === defect.expected)?.text;
+  if (defect.kind === "misspelled" && spec) return `Spell "${spec}" exactly as quoted, letter by letter.`;
+  if (defect.kind === "malformed") return spec ? `Render "${spec}" with clean, fully formed letters.` : "Render every quoted string with clean, fully formed letters.";
+  if (defect.kind === "invented") return "Print every quoted string exactly once, and no words, numbers, marks or logos beyond what is described and quoted above.";
+  if (defect.kind === "encoding") return "Draw no average, target or threshold line anywhere.";
+  return `${defect.message} ${defect.fix}`;
+}
+
+/**
  * Literal, atomic instructions: what to change, quoted old and new strings with a location, then
  * what to keep. Vague instructions ("fix the typo") make editors guess and drift.
  */
@@ -156,7 +170,7 @@ export async function* qualityLoop(input: {
     targets: kindsOf(review),
     prompt: `${input.basePrompt}${revision}${
       review?.defects.length
-        ? `\n\nCORRECTIONS (a previous render got these wrong; get them exactly right):\n${review.defects.map((defect) => `- ${defect.message} ${defect.fix}`).join("\n")}`
+        ? `\n\nCORRECTIONS (a previous render got these wrong; get them exactly right):\n${[...new Set(review.defects.map((defect) => correction(defect, input.qa.contract)))].map((line) => `- ${line}`).join("\n")}`
         : ""
     }`,
     note: "Re-rendering with corrections",
@@ -265,11 +279,12 @@ export async function* qualityLoop(input: {
     if (choice === "b") best = rival;
   }
 
-  // Connectors and benchmark rules are drawn by code where the checker found their anchors.
+  // Connectors and benchmark rules are drawn by code where the checker found their anchors, when
+  // overlays are switched on (see composeStep).
   let finalImage = { url: best.image.url, width: best.image.width, height: best.image.height };
   const review = best.review;
   if (review) {
-    yield { ...base, phase: "checking", pass: passes.length, note: "Drawing connectors" };
+    yield { ...base, phase: "checking", pass: passes.length, note: "Finishing the draft" };
     const composed = await composeStep({ imageUrl: best.image.url, review, plan: input.qa, name: input.fileName });
     if (composed && "url" in composed) finalImage = composed;
     else if (composed) review.designIssues.push(`Connectors could not be drawn: ${composed.error}`);
