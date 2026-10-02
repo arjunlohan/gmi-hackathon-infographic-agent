@@ -58,7 +58,7 @@ export const VARIANTS = {
   // A: product walkthrough, 16:9
   walkthrough: {
     file: "plate-walkthrough-16x9",
-    w: 1920, h: 1080, cap: 4.6, voice: "Samantha", rate: 172, pad: 0.09,
+    w: 1920, h: 1080, cap: 4.6, tts: { voice: "XrExE9yKIg1WjnnlVkGX", model: "eleven_v4", settings: { stability: 0.55, similarity_boost: 0.75 } }, pad: 0.09,
     previewTimes: [25.13, 30.78, 35.43, 55.19],
     scenes: [
       { type: "title", kicker: "Plate · Infographic studio", lines: ["Any story into a", "chart <em>worth sharing</em>"], sub: "Designed, rendered and checked label by label.", subWidth: 46, side: SET, sideSize: 440, sideX: 0.54, min: 3.5,
@@ -93,7 +93,7 @@ export const VARIANTS = {
   // B: the art first, square for the feed
   showcase: {
     file: "material-facts-showcase-1x1",
-    w: 1080, h: 1080, cap: 3.6, voice: "Daniel", rate: 170, pad: 0.1,
+    w: 1080, h: 1080, cap: 3.6, tts: { voice: "JBFqnCBsd6RMkjVDRZzb", model: "eleven_v4", settings: { stability: 0.55, similarity_boost: 0.75 } }, pad: 0.1,
     previewTimes: [6.14, 40.54, 47.19, 53.52],
     scenes: [
       { type: "image", src: SET[0], from: [0, 0, 1], to: [0.02, 0.02, 1.04], size: 820, y: 22, min: 6.5,
@@ -129,19 +129,19 @@ export const VARIANTS = {
   // C: the fact-check story, 16:9
   factcheck: {
     file: "plate-factcheck-story-16x9",
-    w: 1920, h: 1080, cap: 4.6, voice: "Daniel", rate: 170, pad: 0.09,
+    w: 1920, h: 1080, cap: 4.6, tts: { voice: "onwK4e9ZLuTAKqWW03F9", model: "eleven_v4", settings: { stability: 0.55, similarity_boost: 0.75 } }, pad: 0.09,
     previewTimes: [8.54, 15.66, 56.47, 71.28],
     scenes: [
       { type: "compare", heading: "Hy wrote 28,000. The data said 23,000.", ...TOTAL, ...TEST, cropW: 700, top: 320, afterAt: 0, boxAt: 0, min: 6,
         vo: "Hy Image 3.5 renders type beautifully, but small print slips. On this copper test render, a world total of 23,000 came out as 28,000.",
         say: "Hy Image three point five renders type beautifully, but small print slips. On this copper test render, a world total of twenty-three thousand, came out as twenty-eight thousand." },
       { type: "compare", heading: "A word, misspelled", ...SPELL, ...TEST, cropW: 1500, top: 330, afterAt: 2.2, min: 4.5,
-        vo: "Summaries, spelled Summaties. Four times, on two topics.", say: "Summaries, spelled summa-ties. Four times, on two topics." },
+        vo: "Summaries, spelled Summaties. Four times, on two topics.", say: "Summaries, spelled Summa-ties. Four times, on two topics." },
       { type: "compare", heading: "Numbers nobody asked for", ...AXIS, ...TEST, cropW: 860, top: 330, afterAt: 1.6, min: 4.5,
-        vo: "And axis numbers nobody asked for. One Hy edit fixed all three." },
+        vo: "And tick numbers nobody asked for. One Hy edit fixed all three." },
       { type: "stats", items: [{ value: 13, label: "runs for this set" }, { value: 26, label: "render and edit passes" }, { value: 8, label: "misspellings caught" }], min: 4,
-        vo: "Across 13 runs for this set, Plate flagged 8 misspellings and removed text Hy invented.",
-        say: "Across thirteen runs for this set, Plate flagged eight misspellings, and removed text Hy invented." },
+        vo: "Across 13 runs for this set, Plate flagged 8 misspellings and removed text that Hy invented.",
+        say: "Across thirteen runs for this set, Plate flagged eight misspellings, and removed text that Hy invented." },
       composer("Here's the loop. Paste a brief, and pick a format and a style. Meta's Muse Spark 1.3 writes a spec with every string locked.",
         { say: "Here's the loop. Paste a brief, and pick a format and a style. Meta's Muse Spark one point three writes a spec, with every string locked." }),
       progress("Hy Image renders it. Muse Spark, blind to the spec, reads it back, and code diffs every label."),

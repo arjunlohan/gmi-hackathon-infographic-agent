@@ -17,7 +17,29 @@ const OUT = path.join(DIR, "out", name);
 fs.mkdirSync(OUT, { recursive: true });
 const FPS = 30;
 
-// 1. voice
+// 1. voice. ElevenLabs lines are cached by voice, model and text, so a rebuild never pays twice.
+async function eleven(text, tts) {
+  const { createHash } = await import("node:crypto");
+  const dir = path.join(DIR, "out", "tts");
+  fs.mkdirSync(dir, { recursive: true });
+  const key = createHash("sha1").update(JSON.stringify([tts.voice, tts.model, tts.settings, text])).digest("hex").slice(0, 16);
+  const file = path.join(dir, `${key}.mp3`);
+  if (fs.existsSync(file)) return file;
+  if (!process.env.ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY is not set");
+  let res;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${tts.voice}?output_format=mp3_44100_128`, {
+      method: "POST",
+      headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, model_id: tts.model, voice_settings: tts.settings }),
+    });
+    if (res.status !== 429) break;
+    await new Promise((r) => setTimeout(r, 2000 * (attempt + 1))); // account allows 3 concurrent requests
+  }
+  if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  return file;
+}
 const probe = (f) => Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).toString().trim());
 const LEAD = 0.25, TAIL = 0.3, OVERLAP = 0;
 let t = 0;
@@ -26,8 +48,8 @@ const captions = [];
 for (const [i, s] of v.scenes.entries()) {
   let vo = 0;
   if (s.vo) {
-    const file = path.join(OUT, `vo${i}.aiff`);
-    execFileSync("say", ["-v", v.voice, "-r", String(v.rate), "-o", file, s.say ?? s.vo]);
+    const file = v.tts ? await eleven(s.say ?? s.vo, v.tts) : path.join(OUT, `vo${i}.aiff`);
+    if (!v.tts) execFileSync("say", ["-v", v.voice, "-r", String(v.rate), "-o", file, s.say ?? s.vo]);
     vo = probe(file);
     audio.push({ file, at: t + LEAD });
     // captions: one per sentence, timed by character share

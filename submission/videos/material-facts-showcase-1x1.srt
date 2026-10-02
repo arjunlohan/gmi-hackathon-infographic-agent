@@ -1,51 +1,51 @@
 1
-00:00:00,250 --> 00:00:03,270
+00:00:00,250 --> 00:00:03,980
 What if every chart was made of what it measures?
 
 2
-00:00:03,270 --> 00:00:07,892
+00:00:03,980 --> 00:00:09,690
 Copper: Chile mined more than the United States, China and Russia combined.
 
 3
-00:00:08,442 --> 00:00:12,303
+00:00:10,240 --> 00:00:14,800
 Coffee: Brazil grows more than the next four countries together.
 
 4
-00:00:13,442 --> 00:00:17,523
+00:00:15,350 --> 00:00:20,390
 Cotton: China grew more than Brazil and the United States combined.
 
 5
-00:00:18,442 --> 00:00:25,306
+00:00:20,940 --> 00:00:28,300
 Lithium: Australia, China and Chile mined nearly three-quarters of world output, not counting the U.S.
 
 6
-00:00:25,856 --> 00:00:27,592
+00:00:28,850 --> 00:00:30,930
 Each one was made with Plate.
 
 7
-00:00:28,456 --> 00:00:31,327
+00:00:31,480 --> 00:00:34,646
 Paste your data and pick a format and a style.
 
 8
-00:00:31,327 --> 00:00:34,261
+00:00:34,646 --> 00:00:37,880
 Muse Spark turns your brief into a design spec.
 
 9
-00:00:35,456 --> 00:00:42,013
+00:00:38,480 --> 00:00:46,000
 Tencent's Hy Image 3.5 renders it on GMI Cloud, and Plate checks every label against the spec.
 
 10
-00:00:42,563 --> 00:00:48,510
+00:00:46,550 --> 00:00:53,350
 When Hy pointed a note about the whole chart at Zambia, Plate caught it, and one edit erased the line.
 
 11
-00:00:49,060 --> 00:00:54,787
+00:00:53,900 --> 00:00:59,900
 And when it printed 28,000 instead of 23,000, one edit fixed that too.
 
 12
-00:00:55,337 --> 00:00:56,816
+00:01:00,450 --> 00:01:02,376
 Material Facts.
 
 13
-00:00:56,816 --> 00:00:59,577
+00:01:02,376 --> 00:01:05,970
 Every pixel by Hy Image 3.5.
