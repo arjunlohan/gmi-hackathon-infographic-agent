@@ -1,5 +1,9 @@
 # Plate · infographic studio
 
+**Hy Image Challenge entry (Type & Layout):** watch the [demo video](https://youtu.be/Fosr0Ongnno), then see the four infographics, prompts and pass logs in [`submission/`](submission/README.md).
+
+[![Plate demo video](submission/x/youtube-thumbnail.jpg)](https://youtu.be/Fosr0Ongnno)
+
 Chat an idea, paste an article or URL, or upload a document (PDF, text, CSV, image). Plate finds the story, designs a publication-grade infographic for a blog, newsletter, or article, renders it with **Hy Image 3.5 preview on GMI Cloud**, fact-checks every label with a vision pass, fixes what is wrong, and hands back the graphic with key takeaways, a caption, and alt text.
 
 Built on [eve](https://eve.dev) (Vercel's agent framework) with **Meta Muse Spark 1.3 Contributor** (`meta/muse-spark-1.3-contributor`) through the AI SDK and AI Gateway.
