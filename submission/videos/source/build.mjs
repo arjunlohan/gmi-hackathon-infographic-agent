@@ -62,6 +62,7 @@ for (const [i, s] of v.scenes.entries()) {
       c0 += d;
     }
   }
+  s.capBase = captions.length - (s.vo ? s.vo.split(/(?<=[.!?])\s+(?=[A-Z0-9])/).filter((x) => x.trim()).length : 0);
   s.start = t;
   s.dur = Math.max(s.min ?? 2.5, vo + LEAD + TAIL);
   t += s.dur - OVERLAP;
@@ -87,7 +88,13 @@ for (const s of v.scenes) if (s.type === "app" && typeof s.clip.from === "string
   if (s.clip.fit) s.clip.speed = (s.clip.to - s.clip.from) / Math.max(1, s.dur - 0.6 - (s.clip.hold ?? 0));
 }
 v.scenes.at(-1).last = true;
-const TIMELINE = { w: v.w, h: v.h, cap: v.cap, scenes: v.scenes, captions };
+// flow nodes light up when their sentence starts (nodeSentences: sentence index, with a fraction into it)
+for (const s of v.scenes) if (s.nodeSentences) {
+  const at = (x) => { const c = captions[s.capBase + Math.floor(x)]; return (c.start + (c.end - c.start) * (x % 1) - s.start) / s.dur; };
+  s.ats = s.nodeSentences.map((x) => (x < 0 ? 0 : at(x)));
+  if (s.loopSentence !== undefined) s.loopAt = at(s.loopSentence);
+}
+const TIMELINE = { w: v.w, h: v.h, cap: v.cap, drift: v.drift, scenes: v.scenes, captions };
 fs.writeFileSync(path.join(OUT, "timeline.json"), JSON.stringify(TIMELINE, null, 1));
 
 // 3. frames
@@ -139,7 +146,14 @@ if (v.pad) {
   filters.push(`[${n}:a]lowpass=f=900,tremolo=f=0.15:d=0.3,afade=t=in:d=2,afade=t=out:st=${Math.max(0, duration - 2.5)}:d=2.5,volume=${v.pad}[pad]`);
   mixIn += "[pad]"; n += 1;
 }
-filters.push(`${mixIn}amix=inputs=${n}:normalize=0:duration=longest,apad,atrim=0:${duration.toFixed(3)},loudnorm=I=-15:TP=-1.5:LRA=11[out]`);
+if (v.music) {
+  // voice bus drives a sidechain compressor on the music, so the bed ducks under speech
+  inputs.push("-stream_loop", "-1", "-i", path.join(DIR, v.music));
+  filters.push(`${mixIn}amix=inputs=${n}:normalize=0:duration=longest,apad,atrim=0:${duration.toFixed(3)},asplit=2[voice][key]`);
+  filters.push(`[${n}:a]aresample=48000,atrim=0:${duration.toFixed(3)},volume=${v.musicVol ?? 0.5},afade=t=in:d=0.6,afade=t=out:st=${Math.max(0, duration - 3)}:d=3[bed]`);
+  filters.push(`[bed][key]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=350[ducked]`);
+  filters.push(`[voice][ducked]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[out]`);
+} else filters.push(`${mixIn}amix=inputs=${n}:normalize=0:duration=longest,apad,atrim=0:${duration.toFixed(3)},loudnorm=I=-15:TP=-1.5:LRA=11[out]`);
 const mixed = path.join(OUT, "audio.m4a");
 execFileSync("ffmpeg", ["-y", "-loglevel", "error", ...inputs, "-filter_complex", filters.join(";"), "-map", "[out]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", mixed]);
 const final = path.join(DIR, "out", `${v.file}.mp4`);

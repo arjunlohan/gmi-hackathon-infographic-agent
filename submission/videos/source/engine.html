@@ -35,6 +35,17 @@
           box-shadow: 0 14px 40px rgba(60,45,20,.22); border: 2px solid rgba(176,134,42,.35); }
   .chip i { width: .7em; height: .7em; border-radius: 50%; background: var(--gold); display: block; }
   .chip.ok i { background: var(--green); }
+  .node { position: absolute; border-radius: 18px; background: #fff; border: 2px solid rgba(29,28,26,.12); box-shadow: 0 16px 40px rgba(60,45,20,.14);
+          padding: calc(var(--u) * 1.4) calc(var(--u) * .9); text-align: center; display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * .6); }
+  .node .who { font: 700 calc(var(--u) * 1.7) Inter; letter-spacing: .14em; text-transform: uppercase; color: var(--ink2); }
+  .node .what { font: 700 calc(var(--u) * 3.1) / 1.05 Oswald; text-transform: uppercase; color: var(--ink); }
+  .node .how { font: 500 calc(var(--u) * 1.9) / 1.25 Inter; color: var(--ink2); }
+  .node.plate { background: #fff8d6; border-color: #e3c23c; }
+  .node.plate .who { color: #8a6a12; }
+  .stamp { position: absolute; font: 700 calc(var(--u) * 6) Oswald; letter-spacing: .06em; padding: .05em .35em; border: .09em solid currentColor; border-radius: .12em; transform-origin: center; white-space: nowrap; background: rgba(255,255,255,.85); }
+  .feat { position: absolute; background: #fff; border-radius: 16px; box-shadow: 0 14px 36px rgba(60,45,20,.14); padding: calc(var(--u) * 1.8); display: flex; flex-direction: column; gap: calc(var(--u) * .7); border-top: 6px solid #e3c23c; }
+  .feat b { font: 700 calc(var(--u) * 3.4) / 1.05 Oswald; text-transform: uppercase; }
+  .feat span { font: 500 calc(var(--u) * 2.2) / 1.3 Inter; color: var(--ink2); }
   .stat { font: 700 calc(var(--u) * 14) Oswald; color: var(--ink); line-height: 1; }
   .statlabel { font: 600 calc(var(--u) * 2.4) Inter; color: var(--ink2); margin-top: calc(var(--u) * 1); }
 </style>
@@ -69,13 +80,15 @@ const builders = {
     const root = el("div", "layer"); root.style.cssText += `left:${8*U}px;right:${8*U}px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:${2.2*U}px;`;
     const parts = [];
     if (s.kicker) { const k = el("div", "kicker", root); k.textContent = s.kicker; parts.push(k); }
-    for (const line of s.lines) { const d = el("div", "title", root); d.innerHTML = line; if (s.size) d.style.fontSize = (s.size * U) + "px"; parts.push(d); }
+    for (const line of s.lines) { const d = el("div", "title", root); if (s.size) d.style.fontSize = (s.size * U) + "px";
+      if (s.words) { for (const wd of line.split(" ")) { const sp = el("span", "", d); sp.innerHTML = wd + "&nbsp;"; sp.style.display = "inline-block"; parts.push(sp); } }
+      else { d.innerHTML = line; parts.push(d); } }
     if (s.sub) { const d = el("div", "sub", root); d.textContent = s.sub; d.style.maxWidth = (s.subWidth ?? 70) + "%"; parts.push(d); }
     const side = (s.side ?? []).map((src, i) => { const c = el("div", "card"); const sz = s.sideSize ?? T.h * .5; c.style.width = c.style.height = sz + "px"; c.style.left = (T.w * (s.sideX ?? .52) + i * sz * .26) + "px"; c.style.top = (T.h * .5 - sz / 2 + (i % 2 ? sz * .08 : -sz * .06)) + "px"; el("img", "", c).src = src; return c; });
     return (t) => {
       root.style.opacity = edge(s, t);
       side.forEach((c, i) => { const k = reveal(s, t, .3 + i * .22, .8), o = edge(s, t); c.style.opacity = Math.min(k, o); c.style.transform = `translate(${(1 - k) * 6 * U}px, ${Math.sin((t + i) * .6) * .5 * U}px) rotate(${(i - (side.length - 1) / 2) * 5}deg)`; });
-      parts.forEach((p, i) => { const k = reveal(s, t, .12 * i, .6); p.style.transform = `translateY(${(1 - k) * 4 * U}px)`; p.style.opacity = k; });
+      parts.forEach((p, i) => { const k = reveal(s, t, (s.stagger ?? .12) * i, s.words ? .35 : .6); p.style.transform = s.words ? `translateY(${(1 - k) * 3 * U}px) scale(${lerp(1.25, 1, k)})` : `translateY(${(1 - k) * 4 * U}px)`; p.style.opacity = k; });
     };
   },
   // Real app footage inside a browser window, with camera keyframes [{at, zoom, x, y}] (x, y = focus 0-1).
@@ -171,6 +184,7 @@ const builders = {
     };
     const A = mk(s.before, s.beforeLabel ?? "First render", "var(--red)", 0);
     const B = mk(s.after, s.afterLabel ?? "After one Hy edit", "var(--green)", 1);
+    const stamps = (s.stamps ?? []).map((st) => { const e = el("div", "stamp", root); e.textContent = st.text; e.style.color = st.color; const anchor = st.on === "after" ? B[0] : A[0]; e.style.left = (parseFloat(anchor.style.left) + parseFloat(anchor.style.width) * (st.x ?? .62)) + "px"; e.style.top = (parseFloat(anchor.style.top) + parseFloat(anchor.style.height) * (st.y ?? .05)) + "px"; if (st.size) e.style.fontSize = st.size * U + "px"; return { el: e, at: st.at, rot: st.rot ?? -8 }; });
     return (t) => {
       const local = t - s.start;
       root.style.opacity = edge(s, t);
@@ -183,6 +197,7 @@ const builders = {
       head.style.opacity = s.start <= 0 ? 1 : easeOut(local / .4);
       const bx = (c, at) => { if (!c.box) return; const k = s.start <= 0 && at <= 0 ? 1 : easeOut((local - at) / .35); c.box.style.opacity = local >= at ? k : 0; c.box.style.transform = `scale(${lerp(1.25, 1, k)})`; };
       bx(A[0], s.boxAt ?? .9); bx(B[0], (s.afterAt ?? 2.2) + .5);
+      for (const st of stamps) { const k = clamp((local - st.at) / .28); st.el.style.opacity = local >= st.at ? Math.min(1, k * 1.5) : 0; st.el.style.transform = `rotate(${st.rot}deg) scale(${lerp(2.2, 1, easeOut(k))})`; }
     };
   },
   // Grid reveal of the set.
@@ -212,6 +227,44 @@ const builders = {
       parts.forEach((p, i) => { const k = reveal(s, t, .1 * i, .5); p.style.opacity = k; p.style.transform = `translateY(${(1 - k) * 2 * U}px)`; });
     };
   },
+  // Animated pipeline: nodes light up in order, a pulse runs along the arrows, a loop arrow returns.
+  flow(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;`;
+    const head = el("div", "", root); head.style.cssText = `position:absolute;left:${6*U}px;top:${7*U}px;font:700 ${5.2*U}px/1 Oswald;text-transform:uppercase;`; head.innerHTML = s.heading;
+    const n = s.nodes.length, gap = 2.6 * U, w = (T.w - 12 * U - gap * (n - 1)) / n, h = s.nodeH ?? 38 * U, y = s.y ?? T.h * .24;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("width", T.w); svg.setAttribute("height", T.h); svg.style.cssText = "position:absolute;left:0;top:0;overflow:visible"; root.appendChild(svg);
+    const nodes = s.nodes.map((nd, i) => { const d = el("div", "node" + (nd.plate ? " plate" : ""), root); d.style.left = (6 * U + i * (w + gap)) + "px"; d.style.top = y + "px"; d.style.width = w + "px"; d.style.height = h + "px";
+      d.innerHTML = `<div class="who">${nd.who}</div><div class="what">${nd.what}</div><div class="how">${nd.how ?? ""}</div>`; return d; });
+    const arrows = nodes.slice(1).map((_, i) => { const l = document.createElementNS("http://www.w3.org/2000/svg", "line"); const x1 = 6 * U + (i + 1) * (w + gap) - gap + 4, x2 = x1 + gap - 8; l.setAttribute("x1", x1); l.setAttribute("x2", x2); l.setAttribute("y1", y + h / 2); l.setAttribute("y2", y + h / 2); l.setAttribute("stroke", "#1d1c1a"); l.setAttribute("stroke-width", 4); svg.appendChild(l); return l; });
+    const loop = document.createElementNS("http://www.w3.org/2000/svg", "path"); const li = s.loop ?? [n - 1, 2];
+    const lx1 = 6 * U + li[0] * (w + gap) + w / 2, lx2 = 6 * U + li[1] * (w + gap) + w / 2, ly = y + h + 1.5 * U;
+    loop.setAttribute("d", `M ${lx1} ${ly} C ${lx1} ${ly + 11 * U}, ${lx2} ${ly + 11 * U}, ${lx2} ${ly + 1.2 * U}`); loop.setAttribute("fill", "none"); loop.setAttribute("stroke", "#b0862a"); loop.setAttribute("stroke-width", 5); loop.setAttribute("stroke-dasharray", "14 10"); svg.appendChild(loop);
+    const loopLabel = el("div", "", root); loopLabel.textContent = s.loopLabel ?? ""; loopLabel.style.cssText = `position:absolute;left:${(lx1 + lx2) / 2}px;top:${ly + 9 * U}px;transform:translateX(-50%);font:700 ${2.2*U}px Inter;color:#8a6a12;background:#fff8d6;padding:.3em .8em;border-radius:999px;white-space:nowrap;`;
+    const dot = el("div", "", root); dot.style.cssText = `position:absolute;width:${1.6*U}px;height:${1.6*U}px;border-radius:50%;background:#f2d33c;box-shadow:0 0 0 ${.6*U}px rgba(242,211,60,.35);`;
+    const ats = s.ats ?? s.nodes.map((_, i) => i / n);
+    return (t) => {
+      const local = t - s.start, f = local / s.dur;
+      root.style.opacity = edge(s, t); head.style.opacity = reveal(s, t, 0, .4);
+      let active = -1;
+      nodes.forEach((d, i) => { if (f >= ats[i]) active = i; });
+      nodes.forEach((d, i) => { const k = easeOut((f - ats[i]) * s.dur / .5); d.style.opacity = f >= ats[i] ? k : .12; d.style.transform = `translateY(${(1 - clamp(k)) * 3 * U}px) scale(${active === i ? 1.06 : 1})`; d.style.boxShadow = active === i ? "0 0 0 6px rgba(242,211,60,.55), 0 20px 50px rgba(60,45,20,.25)" : ""; });
+      arrows.forEach((a, i) => { a.style.opacity = f >= ats[i + 1] ? 1 : .15; });
+      const lk = clamp((f - (s.loopAt ?? .88)) / .08); loop.style.opacity = lk; loopLabel.style.opacity = lk;
+      if (active >= 0 && active < n - 1) { const seg = clamp((f - ats[active]) / Math.max(.01, ats[active + 1] - ats[active])); const x = 6 * U + active * (w + gap) + w + lerp(-.5 * U, gap, seg); dot.style.left = x + "px"; dot.style.top = (y + h / 2 - .8 * U) + "px"; dot.style.opacity = 1; } else dot.style.opacity = 0;
+    };
+  },
+  // Feature cards popping in one by one.
+  features(s) {
+    const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;`;
+    const head = el("div", "", root); head.style.cssText = `position:absolute;left:${6*U}px;top:${7*U}px;font:700 ${5.2*U}px/1 Oswald;text-transform:uppercase;`; head.innerHTML = s.heading;
+    const cols = s.cols ?? 3, gap = 2.4 * U, w = (T.w - 12 * U - gap * (cols - 1)) / cols, h = s.cardH ?? 22 * U, y0 = s.y ?? T.h * .24;
+    const cards = s.items.map((it, i) => { const c = el("div", "feat", root); c.style.left = (6 * U + (i % cols) * (w + gap)) + "px"; c.style.top = (y0 + Math.floor(i / cols) * (h + gap)) + "px"; c.style.width = w + "px"; c.style.height = h + "px"; c.innerHTML = `<b>${it[0]}</b><span>${it[1]}</span>`; return c; });
+    return (t) => {
+      const local = t - s.start; root.style.opacity = edge(s, t); head.style.opacity = reveal(s, t, 0, .4);
+      const step = (s.dur - 1.2) / cards.length;
+      cards.forEach((c, i) => { const k = clamp((local - .3 - i * step) / .45); const b = k > 0 && k < 1 ? 1 + Math.sin(k * Math.PI) * .08 : 1; c.style.opacity = k; c.style.transform = `translateY(${(1 - easeOut(k)) * 4 * U}px) scale(${lerp(.85, 1, easeOut(k)) * b})`; });
+    };
+  },
   // Big numbers counting up with labels.
   stats(s) {
     const root = el("div", "layer"); root.style.cssText += `left:0;top:0;width:${T.w}px;height:${T.h}px;display:flex;align-items:center;justify-content:center;gap:${10*U}px;`;
@@ -226,6 +279,7 @@ const builders = {
 const renders = T.scenes.map((s) => { const r = builders[s.type](s); return { s, r }; });
 const nodes = [...stage.children];
 window.render = (t) => {
+  if (T.drift) stage.style.background = `radial-gradient(120% 90% at ${50 + Math.sin(t * .23) * 18}% ${40 + Math.cos(t * .17) * 14}%, #fbf8f1 0%, #efe8da 100%)`;
   for (const { s, r } of renders) r(t);
   // hide scenes that are fully outside their window (keeps compositing cheap)
   const quiet = T.scenes.some((s) => s.noCap && t >= s.start && t < s.start + s.dur);

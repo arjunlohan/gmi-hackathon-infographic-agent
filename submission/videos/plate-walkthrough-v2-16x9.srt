@@ -1,0 +1,127 @@
+1
+00:00:00,250 --> 00:00:03,384
+Image models can now draw beautiful charts.
+
+2
+00:00:03,384 --> 00:00:06,810
+But one wrong number, and the chart is useless.
+
+3
+00:00:07,360 --> 00:00:14,320
+In testing, Hy Image printed a world total of 23,000 as 28,000.
+
+4
+00:00:14,870 --> 00:00:16,205
+So we built Plate.
+
+5
+00:00:16,205 --> 00:00:23,030
+It designs with Muse Spark, renders with Hy Image, and checks every label before you see it.
+
+6
+00:00:23,580 --> 00:00:27,125
+You paste your data, and pick a format and a style.
+
+7
+00:00:27,125 --> 00:00:27,820
+That's it.
+
+8
+00:00:28,580 --> 00:00:33,361
+Muse Spark writes a spec with every word and number locked.
+
+9
+00:00:33,361 --> 00:00:35,468
+Plate compiles the prompt.
+
+10
+00:00:35,468 --> 00:00:38,628
+Hy Image renders it at 2K on GMI Cloud.
+
+11
+00:00:38,628 --> 00:00:41,221
+Muse Spark reads it back, blind.
+
+12
+00:00:41,221 --> 00:00:46,326
+Plate's code diffs every label, and Hy fixes only the mistakes.
+
+13
+00:00:46,326 --> 00:00:47,460
+Then it loops.
+
+14
+00:00:48,010 --> 00:00:48,816
+Why blind?
+
+15
+00:00:48,816 --> 00:00:54,299
+A reader who knows the answer tends to see it, even when it's wrong.
+
+16
+00:00:54,299 --> 00:00:58,330
+So Muse Spark only reads, and Plate's code judges.
+
+17
+00:00:58,880 --> 00:01:01,120
+Here's a real run, sped up.
+
+18
+00:01:02,380 --> 00:01:07,020
+Plate's check caught Hy tying a note about the whole chart to Zambia.
+
+19
+00:01:07,570 --> 00:01:10,932
+One targeted Hy edit erased just that line.
+
+20
+00:01:10,932 --> 00:01:14,450
+Everything else stayed exactly as Hy drew it.
+
+21
+00:01:15,000 --> 00:01:20,920
+You get the finished graphic, with takeaways, a caption, alt text and the data table.
+
+22
+00:01:22,000 --> 00:01:24,080
+Plate catches misspellings,
+
+23
+00:01:25,000 --> 00:01:27,560
+and numbers nobody asked for.
+
+24
+00:01:28,110 --> 00:01:34,750
+Plate does the heavy lifting, and it remembers what Hy gets wrong, so every render starts smarter.
+
+25
+00:01:35,610 --> 00:01:41,770
+Copper: Chile mined more than the United States, China and Russia combined.
+
+26
+00:01:42,320 --> 00:01:47,120
+Coffee: Brazil grows more than the next four countries together.
+
+27
+00:01:47,670 --> 00:01:52,630
+Cotton: China grew more than Brazil and the United States combined.
+
+28
+00:01:53,180 --> 00:01:58,700
+Lithium: three countries mined nearly three-quarters, outside the U.S.
+
+29
+00:01:59,250 --> 00:02:06,050
+Material Facts: every chart built from what it measures, and every label checked by Plate.
+
+30
+00:02:06,600 --> 00:02:07,108
+Plate.
+
+31
+00:02:07,108 --> 00:02:08,631
+Hy Image draws it.
+
+32
+00:02:08,631 --> 00:02:10,000
+Plate makes sure it's right.

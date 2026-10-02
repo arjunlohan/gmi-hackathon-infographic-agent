@@ -65,7 +65,8 @@ Three cuts for X, each with burned-in captions and a matching `.srt` file. Every
 | File | Format | Length | Angle |
 | --- | --- | --- | --- |
 | [plate-walkthrough-16x9.mp4](videos/plate-walkthrough-16x9.mp4) | 1920x1080 | 1:47 | How to use Plate, then what the check caught, then the set |
+| [plate-walkthrough-v2-16x9.mp4](videos/plate-walkthrough-v2-16x9.mp4) | 1920x1080 | 2:11 | The pick for X: why Plate wins, how it works (animated architecture, why the read-back is blind), live catches, the set, with a product-demo music bed |
 | [material-facts-showcase-1x1.mp4](videos/material-facts-showcase-1x1.mp4) | 1080x1080 | 1:10 | The set first, then how it was made |
 | [plate-factcheck-story-16x9.mp4](videos/plate-factcheck-story-16x9.mp4) | 1920x1080 | 2:00 | Where Hy's small print slips, how Plate catches it, including the one it missed |
 
-The narration is ElevenLabs Eleven v4 (voices Matilda, George and Daniel); every line was transcribed back with ElevenLabs Scribe and checked against the script. The videos were rendered frame by frame from an HTML timeline in headless Chrome and encoded with ffmpeg; the scripts are in [videos/source/](videos/source/) (the screen captures and image assets they read are not committed).
+The narration is ElevenLabs Eleven v4, and the v2 music bed is ElevenLabs Music, (voices Matilda, George and Daniel); every line was transcribed back with ElevenLabs Scribe and checked against the script. The videos were rendered frame by frame from an HTML timeline in headless Chrome and encoded with ffmpeg; the scripts are in [videos/source/](videos/source/) (the screen captures and image assets they read are not committed).
